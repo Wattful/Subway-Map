@@ -204,34 +204,34 @@ const PLATFORM_SETS = {
 	]]),
 };
 
-const selfPointingStationObjectDefault = (name, boardings, rank) => {return {[name]: new Station(name, [PLATFORM_SETS[name]], boardings, rank)}};
-const selfPointingStationObject = (name, disambiguator, platformSets, boardings, rank) => {return {[name + (disambiguator ? ` ${disambiguator}` : "")]: new Station(name, platformSets, boardings, rank)}};
+const selfPointingStationObjectDefault = (name, boardings) => {return {[name]: new Station(name, [PLATFORM_SETS[name]], boardings)}};
+const selfPointingStationObject = (name, disambiguator, platformSets, boardings) => {return {[name + (disambiguator ? ` ${disambiguator}` : "")]: new Station(name, platformSets, boardings)}};
 
 const STATIONS = {
-	...selfPointingStationObjectDefault("Jamaica-179th Street", 3944828, 72),
-	...selfPointingStationObjectDefault("169th Street", 1627817, 200),
-	...selfPointingStationObjectDefault("Parsons Boulevard", 1584984, 207),
-	...selfPointingStationObjectDefault("Sutphin Boulevard", 5941974, 34),
-	...selfPointingStationObjectDefault("Briarwood", 1046884, 286),
-	...selfPointingStationObjectDefault("Kew Gardens-Union Turnpike", 5016215, 53),
-	...selfPointingStationObjectDefault("75th Avenue", 683707, 352),
-	...selfPointingStationObjectDefault("Forest Hills-71st Avenue", 5509732, 43),
-	...selfPointingStationObjectDefault("67th Avenue", 1658341, 194),
-	...selfPointingStationObjectDefault("63rd Drive-Rego Park", 3033839, 106),
-	...selfPointingStationObjectDefault("Woodhaven Boulevard", 4237180, 67),
-	...selfPointingStationObjectDefault("Grand Avenue-Newtown", 3893242, 74),
-	...selfPointingStationObjectDefault("Elmhurst Avenue", 2676734, 130),
-	...selfPointingStationObject("Jackson Heights–Roosevelt Avenue/74th Street", null, [PLATFORM_SETS["Jackson Heights-Roosevelt Avenue"]], 14348691, 9),
-	...selfPointingStationObjectDefault("65th Street", 729908, 345),
-	...selfPointingStationObjectDefault("46th Street", 1662115, 193),
-	...selfPointingStationObjectDefault("Steinway Street", 2730057, 125),
-	...selfPointingStationObjectDefault("36th Street", 769239, 339),
-	...selfPointingStationObjectDefault("Queens Plaza", 3645653, 85),
-	...selfPointingStationObject("Court Square-23rd Street", null, [PLATFORM_SETS["Court Square-23rd Street"]], 5381184, 48),
-	...selfPointingStationObject("Lexington Avenue/51st Street", null, [PLATFORM_SETS["Lexington Avenue-53rd Street"]], 11339465, 14),
-	...selfPointingStationObjectDefault("Fifth Avenue-53rd Street", 4733296, 58),
-	...selfPointingStationObjectDefault("Seventh Avenue", 3892682, 75),
-	...selfPointingStationObjectDefault("50th Street", 4857531, 56),
+	...selfPointingStationObjectDefault("Jamaica-179th Street", 3944828),
+	...selfPointingStationObjectDefault("169th Street", 1627817),
+	...selfPointingStationObjectDefault("Parsons Boulevard", 1584984),
+	...selfPointingStationObjectDefault("Sutphin Boulevard", 5941974),
+	...selfPointingStationObjectDefault("Briarwood", 1046884),
+	...selfPointingStationObjectDefault("Kew Gardens-Union Turnpike", 5016215),
+	...selfPointingStationObjectDefault("75th Avenue", 683707),
+	...selfPointingStationObjectDefault("Forest Hills-71st Avenue", 5509732),
+	...selfPointingStationObjectDefault("67th Avenue", 1658341),
+	...selfPointingStationObjectDefault("63rd Drive-Rego Park", 3033839),
+	...selfPointingStationObjectDefault("Woodhaven Boulevard", 4237180),
+	...selfPointingStationObjectDefault("Grand Avenue-Newtown", 3893242),
+	...selfPointingStationObjectDefault("Elmhurst Avenue", 2676734),
+	...selfPointingStationObject("Jackson Heights–Roosevelt Avenue/74th Street", null, [PLATFORM_SETS["Jackson Heights-Roosevelt Avenue"]], 14348691),
+	...selfPointingStationObjectDefault("65th Street", 729908),
+	...selfPointingStationObjectDefault("46th Street", 1662115),
+	...selfPointingStationObjectDefault("Steinway Street", 2730057),
+	...selfPointingStationObjectDefault("36th Street", 769239),
+	...selfPointingStationObjectDefault("Queens Plaza", 3645653),
+	...selfPointingStationObject("Court Square-23rd Street", null, [PLATFORM_SETS["Court Square-23rd Street"]], 5381184),
+	...selfPointingStationObject("Lexington Avenue/51st Street", null, [PLATFORM_SETS["Lexington Avenue-53rd Street"]], 11339465),
+	...selfPointingStationObjectDefault("Fifth Avenue-53rd Street", 4733296),
+	...selfPointingStationObjectDefault("Seventh Avenue", 3892682),
+	...selfPointingStationObjectDefault("50th Street", 4857531),
 }
 
 const LINES = {
@@ -252,6 +252,7 @@ const LINES = {
 		PLATFORM_SETS["67th Avenue"],
 		PLATFORM_SETS["63rd Drive-Rego Park"],
 		PLATFORM_SETS["Woodhaven Boulevard"],
+		PLATFORM_SETS["Grand Avenue-Newtown"],
 		PLATFORM_SETS["Elmhurst Avenue"],
 		new TrackInformationDiff({"opened": DateTime.fromObject({year: 1933, month: 8, day: 19})}),
 		PLATFORM_SETS["Jackson Heights-Roosevelt Avenue"],
@@ -453,7 +454,6 @@ for(const service in SERVICES){
 				if((trackNext === undefined && slice.internalDirection !== InternalDirection.PREVIOUS) || (trackPrevious === undefined && slice.internalDirection !== InternalDirection.NEXT)){
 					throw new Error(`Track of type ${slice.type} not found in ${platformSet.name}`);
 				}
-				// TODO differentiate on next stop/last stop
 				compiledRoute.push(new ServiceStop(platformSet.name, trackNext, trackPrevious));
 			} while(map[index].name !== slice.to);
 			prevSlice = slice;
@@ -464,33 +464,13 @@ for(const service in SERVICES){
 		const lastStopPrevious = compiledRoute[0].stop;
 		for(let i = 0; i < compiledRoute.length; i++){
 			const {trackNext, trackPrevious} = compiledRoute[i];
-			const nextStopNext = (i === compiledRoute.length - 1 ? "" : compiledRoute[i + 1]).stop;
-			const nextStopPrevious = (i === 0 ? "" : compiledRoute[i - 1]).stop;
+			const nextStopNext = compiledRoute.find((el, index) => el.trackNext?.stops === true && index > i)?.stop ?? "\"\"";
+			const nextStopPrevious = compiledRoute.toReversed().find((el, index) => el.trackPrevious?.stops === true && index >= (compiledRoute.length - i))?.stop ?? "\"\"";
 			accumulateTrackServiceTime(trackNext, service, nextStopNext, lastStopNext, pattern.serviceTime);
 			accumulateTrackServiceTime(trackPrevious, service, nextStopPrevious, lastStopPrevious, pattern.serviceTime);
 		}
 	}
 }
-
-//After the previous code block, track service times are a three-level object, "flatten" this to make it more easily readable
-// for(const platformSet of Object.values(PLATFORM_SETS)){
-// 	for(const floor of platformSet.layout){
-// 		for(const track of floor){
-// 			if(track.category !== "Track"){
-// 				continue;
-// 			}
-// 			for(const service of Object.keys(track.service)){
-// 				const timeAndStops = [];
-// 				for(const nextStop of Object.keys(track.service[service])){
-// 					for(const [lastStop, serviceTime] of Object.entries(track.service[service][nextStop])){
-// 						timeAndStops.push(new ServiceTimeStops(serviceTime, nextStop, lastStop));
-// 					}
-// 				}
-// 				track.service[service] = new ServiceServiceTimes(timeAndStops);
-// 			}
-// 		}
-// 	}
-// }
 
 for(const platformSet of Object.values(PLATFORM_SETS)){
 	for(const floor of platformSet.layout){
@@ -505,5 +485,8 @@ for(const platformSet of Object.values(PLATFORM_SETS)){
 		}
 	}
 }
+
+// TODO fails in a tie, although that case is unlikely
+Object.values(STATIONS).toSorted((a, b) => b.boardings - a.boardings).forEach((el, index) => el.rank = index + 1);
 
 export {LINES, PLATFORM_SETS, SERVICES, STATIONS}

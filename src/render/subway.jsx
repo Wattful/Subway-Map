@@ -1,10 +1,9 @@
 import React, {useState} from "react";
 import {BrowserRouter, Route, Routes, Link, useSearchParams, useParams} from "react-router-dom";
 import {LINES, PLATFORM_SETS, SERVICES, STATIONS} from "../data/data.jsx";
-import {ServiceType} from "../data/enums.jsx";
 import {
+	ServiceType,
 	LineName,
-	Service,
 	PlatformSetType,
 	TrackType,
 	PlatformType,
@@ -15,6 +14,7 @@ import {
 	JunctionType,
 	BuiltFor
 } from "../data/enums.jsx";
+import {serviceTimeEqual} from "../data/objects.jsx";
 
 function Subway({}){
 	return (
@@ -29,11 +29,12 @@ function Subway({}){
 
 function SubwayFocusExample({}){
 	const [searchParams, setSearchParams] = useSearchParams();
-	const focus = searchParams.get("focus");
+	const platformSet = searchParams.get("ps");
+	const service = searchParams.get("service");
 	const highlight = searchParams.get("highlight");
 	const select = searchParams.get("select") === "true" || false;
 
-	const selfPointingTrackAttributeObject = (name, options) => {return {[name]: new TrackAttribute(name, focus, options, setSearchParams)}};
+	const selfPointingTrackAttributeObject = (name, options) => {return {[name]: new TrackAttribute(name, platformSet, options, setSearchParams)}};
 	const trackAttributes = {
 		...selfPointingTrackAttributeObject("Total Tracks", [1, 2, 3, 4, 6, 8]),
 		...selfPointingTrackAttributeObject("Used Tracks", [0, 1, 2, 3, 4, 6, 8]),
@@ -65,10 +66,12 @@ function SubwayFocusExample({}){
 			{Object.values(trackAttributes).map(attribute => (<li><attribute.Selector/></li>))}
 			</ul>
 			<br/>
-			{focus && (<Station station={STATIONS[focus]} select={select}/>)}
+			{platformSet && (<Station station={STATIONS[platformSet]} select={select}/>)}
+			<br/>
+			{service && (<Service service={SERVICES[service]} select={select}/>)}
 			Stations:<br/>
 			<ul>
-			{Object.keys(STATIONS).map(lineName => (<li><span onClick={() => {updateSearchParams(setSearchParams, "focus", lineName)}}>{lineName}</span></li>))}
+			{Object.keys(STATIONS).map(lineName => (<li><span onClick={() => {updateSearchParams(setSearchParams, "ps", lineName)}}>{lineName}</span></li>))}
 			</ul>
 		</>
 	);
@@ -137,25 +140,63 @@ function Track({track, select}){
 }
 
 function NextLastStops({serviceTimeStops, select}){
-	const {nextStopService, lastStopService} = serviceTimeStops;
+	const {serviceTime, nextStopService, lastStopService} = serviceTimeStops;
 	const getStopString = (service, select) => {
 		return Object.entries(service).map(([stop, time], i, serviceTimes) => {
-			console.log(stop)
 			if(select){
 				// TODO consolidate this with above?
 				// TODO eliminate INDIVIDUAL time strings if equal to track service time?
-				return serviceTimes.length > 1 ? `${stop} ${serviceTimeString(time, ServiceType.YES)} ${serviceTimeString(time, ServiceType.SELECT)} ` : stop;
+				return serviceTimes.length > 1 && !serviceTimeEqual(time, serviceTime) ? `${stop} ${serviceTimeString(time, ServiceType.YES)} ${serviceTimeString(time, ServiceType.SELECT)} ` : stop;
 			} else {
-				return [time.earlyMorning, time.rushHour, time.midday, time.evening, time.lateNights, time.weekends].some(t => t === ServiceType.YES) ? (serviceTimes.length > 1 ? `${stop} ${serviceTimeString(serviceTime, ServiceType.YES)} ` : stop) : "";
+				return [time.earlyMorning, time.rushHour, time.midday, time.evening, time.lateNights, time.weekends].some(t => t === ServiceType.YES) ? (serviceTimes.length > 1 && !serviceTimeEqual(time, serviceTime) ? `${stop} ${serviceTimeString(time, ServiceType.YES)} ` : stop) : "";
 			}
 		});
 	};
+	// TODO figure out how to handle last stop
 	return `Next stop ${getStopString(nextStopService, select)}, Last stop ${getStopString(lastStopService, select)}`
 }
 
 function Platform({platform}){
 	const {type, accessible} = platform;
 	return (<>{`${type} Platform${accessible ? " (accessible)" : ""}`}<br/></>);
+}
+
+function Service({service, select}){
+	// 1. name, 2. service time description, 3. stations
+	return (
+		<table>
+			<tbody>
+				{service.filter(pattern => showTime(pattern.serviceTime, select)).map(pattern => (
+					<tr>
+						<td>
+							{pattern.name}
+						</td>
+						<td>
+							{pattern.serviceDescription}
+						</td>
+						{pattern.compiledRoute.map(serviceStop => (
+							<td>
+								{(() => {
+									const {stop, trackNext, trackPrevious} = serviceStop;
+									const stopsNext = trackNext?.stops;
+									const stopsPrevious = trackPrevious?.stops;
+									if(!stopsNext && !stopsPrevious){
+										return (<i>{stop}</i>);
+									} else if(stopsNext && !stopsPrevious){
+										return `${stop}\u2191`;
+									} else if(stopsNext && !stopsPrevious){
+										return `${stop}\u2193`;
+									} else {
+										return stop;
+									}
+								})()}
+							</td>
+						))}
+					</tr>
+				))}
+			</tbody>
+		</table>
+	);
 }
 
 function serviceTimeString(serviceTime, level){
@@ -184,6 +225,11 @@ function serviceTimeString(serviceTime, level){
 	} else {
 		return "";
 	}
+}
+
+function showTime(serviceTime, select){
+	// TODO utilize
+	return select || [serviceTime.earlyMorning, serviceTime.rushHour, serviceTime.midday, serviceTime.evening, serviceTime.lateNights, serviceTime.weekends].some(t => t === ServiceType.YES);
 }
 
 // NOT a react component, an object with two react components

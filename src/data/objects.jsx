@@ -57,11 +57,11 @@ function Line(name, division, map){
 	this.map = map; 
 }
 
-function Station(name, platformSets, boardings, rank){
+function Station(name, platformSets, boardings){
 	this.name = name;
 	this.platformSets = platformSets;
 	this.boardings = boardings;
-	this.rank = rank;
+	this.rank = null;
 }
 
 function TrackInformation(type, signaling, obf, opened, used_tracks, unused_tracks){
@@ -99,6 +99,11 @@ function ServiceTime(earlyMorning, rushHour, midday, evening, lateNights, weeken
 	this.weekends = weekends;
 }
 
+function serviceTimeEqual(service1, service2){
+	const s2 = [service2.earlyMorning, service2.rushHour, service2.midday, service2.evening, service2.lateNights, service2.weekends];
+	return [service1.earlyMorning, service1.rushHour, service1.midday, service1.evening, service1.lateNights, service1.weekends].every((e, i) => e === s2[i]);
+}
+
 function ServiceTimeStops(nextStopService, lastStopService){
 	this.nextStopService = nextStopService;
 	this.lastStopService = lastStopService;
@@ -113,10 +118,10 @@ function ServiceTimeStops(nextStopService, lastStopService){
 
 const accumulateServiceTime = (patterns) => patterns.reduce((base, next) => (next === null ? base : new ServiceTime(Math.max(base.earlyMorning, next.earlyMorning), Math.max(base.rushHour, next.rushHour), Math.max(base.midday, next.midday), Math.max(base.evening, next.evening), Math.max(base.lateNights, next.lateNights), Math.max(base.weekends, next.weekends))), new ServiceTime(ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO));
 
-function ServicePattern(name, bullet, describer, serviceDirection, serviceTime, route){
+function ServicePattern(name, bullet, serviceDescription, serviceDirection, serviceTime, route){
 	this.name = name;
 	this.bullet = bullet; // TODO
-	this.describer = describer;
+	this.serviceDescription = serviceDescription;
 	this.serviceDirection = serviceDirection;
 	this.serviceTime = serviceTime;
 	this.route = route;
@@ -157,6 +162,7 @@ export {
 	TrackInformationDiff,
 	Junction,
 	ServiceTime,
+	serviceTimeEqual,
 	ServiceTimeStops,
 	accumulateServiceTime,
 	ServicePattern,
