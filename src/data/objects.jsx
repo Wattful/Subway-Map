@@ -34,7 +34,7 @@ function Platform(type, accessible){
 	this.accessible = accessible;
 }
 
-function PlatformSet(name, type, odt, opened, layout){
+function PlatformSet(name, type, odt, opened, layout, position){
 	this.category = "PlatformSet";
 	this.name = name;
 	this.type = type;
@@ -48,6 +48,7 @@ function PlatformSet(name, type, odt, opened, layout){
 	this.opened = opened
 	// TODO verification function?
 	this.layout = layout
+	this.position = position
 	this.platformName = null;
 }
 
@@ -120,7 +121,7 @@ const accumulateServiceTime = (patterns) => patterns.reduce((base, next) => (nex
 
 function ServicePattern(name, bullet, serviceDescription, serviceDirection, serviceTime, route){
 	this.name = name;
-	this.bullet = bullet; // TODO
+	this.Bullet = bullet;
 	this.serviceDescription = serviceDescription;
 	this.serviceDirection = serviceDirection;
 	this.serviceTime = serviceTime;

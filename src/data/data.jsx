@@ -55,6 +55,13 @@ Route:
 // Operations needed for enum: "Hard" access, has, iteration
 */
 
+// WEST EDGE: -74.0508 EAST EDGE -73.7462 (684.433)
+// NORTH EDGE: 40.9126 SOUTH EDGE: 40.5578 (1038.043)
+// -(y - 40.9126)(2,925.713)
+// -(x - -74.0508)(2,246.989)
+//def convert(x, y):
+//  return ((-1 * (x + 74.0508) * 2246.989), (-1 * (y - 40.9126) * (2925.713)))
+
 import React from "react";
 import {DateTime} from "luxon";
 import {
@@ -89,6 +96,13 @@ import {
 	Miscellaneous,
 	categorySearchFunction,
 } from "./objects.jsx";
+import {
+	EBullet,
+	FBullet,
+	FdBullet,
+	MBullet,
+	RBullet,
+} from "./bullets.jsx";
 
 // Common four-track platform layouts
 const fourTrackExpressLayout = (line, accessibleNext, accessiblePrevious) => [[
@@ -151,34 +165,34 @@ const twoTrackSeparatedLayout = (line, accessibleNext, accessiblePrevious) => //
 ]];
 
 
-const selfPointingPlatformSetObject = (name, disambiguator, type, odt, opened, layout) => {return {[name + (disambiguator ? ` ${disambiguator}` : "")]: new PlatformSet(name, type, odt, opened, layout)}};
+const selfPointingPlatformSetObject = (name, disambiguator, type, odt, opened, layout, position) => {return {[name + (disambiguator ? ` ${disambiguator}` : "")]: new PlatformSet(name, type, odt, opened, layout, position)}};
 
 const PLATFORM_SETS = {
-	...selfPointingPlatformSetObject("Jamaica-179th Street", null, PlatformSetType.UNDERGROUND, null, DateTime.fromObject({year: 1950, month: 12, day: 10}), fourTrackExpressLayout(LineName.IND_QUEENS_BOULEVARD_LINE, true, true)),
-	...selfPointingPlatformSetObject("169th Street", null, PlatformSetType.UNDERGROUND, true, DateTime.fromObject({year: 1937, month: 4, day: 24}), fourTrackLocalLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false)),
-	...selfPointingPlatformSetObject("Parsons Boulevard", null, PlatformSetType.UNDERGROUND, true, DateTime.fromObject({year: 1937, month: 4, day: 24}), fourTrackExpressLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false)),
-	...selfPointingPlatformSetObject("Sutphin Boulevard", null, PlatformSetType.UNDERGROUND, true, DateTime.fromObject({year: 1937, month: 4, day: 24}), fourTrackLocalLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false)),
-	...selfPointingPlatformSetObject("Briarwood", null, PlatformSetType.UNDERGROUND, false, DateTime.fromObject({year: 1937, month: 4, day: 24}), fourTrackLocalLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false)),
-	...selfPointingPlatformSetObject("Kew Gardens-Union Turnpike", null, PlatformSetType.UNDERGROUND, true, DateTime.fromObject({year: 1936, month: 12, day: 31}), fourTrackExpressLayout(LineName.IND_QUEENS_BOULEVARD_LINE, true, true)),
-	...selfPointingPlatformSetObject("75th Avenue", null, PlatformSetType.UNDERGROUND, false, DateTime.fromObject({year: 1936, month: 12, day: 31}), fourTrackLocalLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false)),
-	...selfPointingPlatformSetObject("Forest Hills-71st Avenue", null, PlatformSetType.UNDERGROUND, true, DateTime.fromObject({year: 1936, month: 12, day: 31}), fourTrackExpressLayout(LineName.IND_QUEENS_BOULEVARD_LINE, true, true)),
-	...selfPointingPlatformSetObject("67th Avenue", null, PlatformSetType.UNDERGROUND, true, DateTime.fromObject({year: 1936, month: 12, day: 31}), fourTrackLocalLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false)),
-	...selfPointingPlatformSetObject("63rd Drive-Rego Park", null, PlatformSetType.UNDERGROUND, true, DateTime.fromObject({year: 1936, month: 12, day: 31}), fourTrackLocalLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false)),
-	...selfPointingPlatformSetObject("Woodhaven Boulevard", null, PlatformSetType.UNDERGROUND, true, DateTime.fromObject({year: 1936, month: 12, day: 31}), fourTrackLocalLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false)),
-	...selfPointingPlatformSetObject("Grand Avenue-Newtown", null, PlatformSetType.UNDERGROUND, true, DateTime.fromObject({year: 1936, month: 12, day: 31}), fourTrackLocalLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false)),
-	...selfPointingPlatformSetObject("Elmhurst Avenue", null, PlatformSetType.UNDERGROUND, true, DateTime.fromObject({year: 1936, month: 12, day: 31}), fourTrackLocalLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false)),
-	...selfPointingPlatformSetObject("Jackson Heights-Roosevelt Avenue", null, PlatformSetType.UNDERGROUND, true, DateTime.fromObject({year: 1933, month: 8, day: 19}), fourTrackExpressLayout(LineName.IND_QUEENS_BOULEVARD_LINE, true, true)),
-	...selfPointingPlatformSetObject("65th Street", null, PlatformSetType.UNDERGROUND, true, DateTime.fromObject({year: 1933, month: 8, day: 19}), fourTrackLocalLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false)),
-	...selfPointingPlatformSetObject("Northern Boulevard", null, PlatformSetType.UNDERGROUND, false, DateTime.fromObject({year: 1933, month: 8, day: 19}), fourTrackLocalSeparatedByTypeLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false)),
+	...selfPointingPlatformSetObject("Jamaica-179th Street", null, PlatformSetType.UNDERGROUND, null, DateTime.fromObject({year: 1950, month: 12, day: 10}), fourTrackExpressLayout(LineName.IND_QUEENS_BOULEVARD_LINE, true, true), [600.62, 585.14]),
+	...selfPointingPlatformSetObject("169th Street", null, PlatformSetType.UNDERGROUND, true, DateTime.fromObject({year: 1937, month: 4, day: 24}), fourTrackLocalLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false), [577.48, 591.87]),
+	...selfPointingPlatformSetObject("Parsons Boulevard", null, PlatformSetType.UNDERGROUND, true, DateTime.fromObject({year: 1937, month: 4, day: 24}), fourTrackExpressLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false), [555.68, 600.36]),
+	...selfPointingPlatformSetObject("Sutphin Boulevard", null, PlatformSetType.UNDERGROUND, true, DateTime.fromObject({year: 1937, month: 4, day: 24}), fourTrackLocalLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false), [539.95, 606.21]),
+	...selfPointingPlatformSetObject("Briarwood", null, PlatformSetType.UNDERGROUND, false, DateTime.fromObject({year: 1937, month: 4, day: 24}), fourTrackLocalLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false), [518.61, 597.14]),
+	...selfPointingPlatformSetObject("Kew Gardens-Union Turnpike", null, PlatformSetType.UNDERGROUND, true, DateTime.fromObject({year: 1936, month: 12, day: 31}), fourTrackExpressLayout(LineName.IND_QUEENS_BOULEVARD_LINE, true, true), [494.11, 580.46]),
+	...selfPointingPlatformSetObject("75th Avenue", null, PlatformSetType.UNDERGROUND, false, DateTime.fromObject({year: 1936, month: 12, day: 31}), fourTrackLocalLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false), [479.96, 568.17]),
+	...selfPointingPlatformSetObject("Forest Hills-71st Avenue", null, PlatformSetType.UNDERGROUND, true, DateTime.fromObject({year: 1936, month: 12, day: 31}), fourTrackExpressLayout(LineName.IND_QUEENS_BOULEVARD_LINE, true, true), [463.55, 558.81]),
+	...selfPointingPlatformSetObject("67th Avenue", null, PlatformSetType.UNDERGROUND, true, DateTime.fromObject({year: 1936, month: 12, day: 31}), fourTrackLocalLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false), [444.00, 543.60]),
+	...selfPointingPlatformSetObject("63rd Drive-Rego Park", null, PlatformSetType.UNDERGROUND, true, DateTime.fromObject({year: 1936, month: 12, day: 31}), fourTrackLocalLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false), [424.91, 534.53]),
+	...selfPointingPlatformSetObject("Woodhaven Boulevard", null, PlatformSetType.UNDERGROUND, true, DateTime.fromObject({year: 1936, month: 12, day: 31}), fourTrackLocalLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false), [406.03, 524.29]),
+	...selfPointingPlatformSetObject("Grand Avenue-Newtown", null, PlatformSetType.UNDERGROUND, true, DateTime.fromObject({year: 1936, month: 12, day: 31}), fourTrackLocalLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false), [389.40, 514.34]),
+	...selfPointingPlatformSetObject("Elmhurst Avenue", null, PlatformSetType.UNDERGROUND, true, DateTime.fromObject({year: 1936, month: 12, day: 31}), fourTrackLocalLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false), [379.52, 497.96]),
+	...selfPointingPlatformSetObject("Jackson Heights-Roosevelt Avenue", null, PlatformSetType.UNDERGROUND, true, DateTime.fromObject({year: 1933, month: 8, day: 19}), fourTrackExpressLayout(LineName.IND_QUEENS_BOULEVARD_LINE, true, true), [360.19, 486.55]),
+	...selfPointingPlatformSetObject("65th Street", null, PlatformSetType.UNDERGROUND, true, DateTime.fromObject({year: 1933, month: 8, day: 19}), fourTrackLocalLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false), [344.46, 477.77]),
+	...selfPointingPlatformSetObject("Northern Boulevard", null, PlatformSetType.UNDERGROUND, false, DateTime.fromObject({year: 1933, month: 8, day: 19}), fourTrackLocalSeparatedByTypeLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false), [323.12, 466.36]),
 	//...selfPointingPlatformSetObject("46th Street", null, PlatformSetType.UNDERGROUND, false, DateTime.fromObject({year: 1933, month: 8, day: 19}), twoTrackSideLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false, TrackType.LOCAL)),
 	//...selfPointingPlatformSetObject("Steinway Street", null, PlatformSetType.UNDERGROUND, true, DateTime.fromObject({year: 1933, month: 8, day: 19}), twoTrackSideLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false, TrackType.LOCAL)),
-	...selfPointingPlatformSetObject("46th Street", null, PlatformSetType.UNDERGROUND, false, DateTime.fromObject({year: 1933, month: 8, day: 19}), fourTrackLocalLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false)),
-	...selfPointingPlatformSetObject("Steinway Street", null, PlatformSetType.UNDERGROUND, true, DateTime.fromObject({year: 1933, month: 8, day: 19}), fourTrackLocalLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false)),
-	...selfPointingPlatformSetObject("36th Street", null, PlatformSetType.UNDERGROUND, false, DateTime.fromObject({year: 1933, month: 8, day: 19}), fourTrackLocalLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false)),
-	...selfPointingPlatformSetObject("Queens Plaza", null, PlatformSetType.UNDERGROUND, true, DateTime.fromObject({year: 1933, month: 8, day: 19}), fourTrackExpressLayout(LineName.IND_QUEENS_BOULEVARD_LINE, true, true)),
-	...selfPointingPlatformSetObject("Court Square-23rd Street", null, PlatformSetType.UNDERGROUND, true, DateTime.fromObject({year: 1939, month: 8, day: 28}), twoTrackSideLayout(LineName.IND_QUEENS_BOULEVARD_LINE, true, false)),
-	...selfPointingPlatformSetObject("Lexington Avenue-53rd Street", null, PlatformSetType.UNDERGROUND, true, DateTime.fromObject({year: 1933, month: 8, day: 19}), twoTrackIslandLayout(LineName.IND_QUEENS_BOULEVARD_LINE, true)),
-	...selfPointingPlatformSetObject("Fifth Avenue-53rd Street", null, PlatformSetType.UNDERGROUND, true, DateTime.fromObject({year: 1933, month: 8, day: 19}), twoTrackSeparatedLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false)),
+	...selfPointingPlatformSetObject("46th Street", null, PlatformSetType.UNDERGROUND, false, DateTime.fromObject({year: 1933, month: 8, day: 19}), fourTrackLocalLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false), [306.94, 456.12]),
+	...selfPointingPlatformSetObject("Steinway Street", null, PlatformSetType.UNDERGROUND, true, DateTime.fromObject({year: 1933, month: 8, day: 19}), fourTrackLocalLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false), [293.46, 454.36]),
+	...selfPointingPlatformSetObject("36th Street", null, PlatformSetType.UNDERGROUND, false, DateTime.fromObject({year: 1933, month: 8, day: 19}), fourTrackLocalLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false), [273.91, 470.16]),
+	...selfPointingPlatformSetObject("Queens Plaza", null, PlatformSetType.UNDERGROUND, true, DateTime.fromObject({year: 1933, month: 8, day: 19}), fourTrackExpressLayout(LineName.IND_QUEENS_BOULEVARD_LINE, true, true), [255.48, 478.94]),
+	...selfPointingPlatformSetObject("Court Square-23rd Street", null, PlatformSetType.UNDERGROUND, true, DateTime.fromObject({year: 1939, month: 8, day: 28}), twoTrackSideLayout(LineName.IND_QUEENS_BOULEVARD_LINE, true, false), [235.48, 482.16]),
+	...selfPointingPlatformSetObject("Lexington Avenue-53rd Street", null, PlatformSetType.UNDERGROUND, true, DateTime.fromObject({year: 1933, month: 8, day: 19}), twoTrackIslandLayout(LineName.IND_QUEENS_BOULEVARD_LINE, true), [181.11, 452.02]),
+	...selfPointingPlatformSetObject("Fifth Avenue-53rd Street", null, PlatformSetType.UNDERGROUND, true, DateTime.fromObject({year: 1933, month: 8, day: 19}), twoTrackSeparatedLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false), [168.75, 445.59]),
 	...selfPointingPlatformSetObject("Seventh Avenue", null, PlatformSetType.UNDERGROUND, true, DateTime.fromObject({year: 1933, month: 8, day: 19}), [[
 		new Track(LineName.IND_QUEENS_BOULEVARD_LINE, TrackType.NORMAL, InternalDirection.NEXT, true),
 		new Platform(PlatformType.ISLAND, false),
@@ -187,7 +201,7 @@ const PLATFORM_SETS = {
 		new Track(LineName.IND_QUEENS_BOULEVARD_LINE, TrackType.NORMAL, InternalDirection.PREVIOUS, true),
 		new Platform(PlatformType.ISLAND, false),
 		new Track(LineName.IND_SIXTH_AVENUE_LINE, TrackType.NORMAL, InternalDirection.NEXT, true),
-	]]),
+	]], [155.04, 437.98]),
 	...selfPointingPlatformSetObject("50th Street", null, PlatformSetType.UNDERGROUND, true, DateTime.fromObject({year: 1933, month: 8, day: 19}), [[
 		new Platform(PlatformType.SIDE, false),
 		new Track(LineName.IND_EIGHTH_AVENUE_LINE, TrackType.LOCAL, InternalDirection.NEXT, true),
@@ -201,7 +215,7 @@ const PLATFORM_SETS = {
 		new Miscellaneous("Wall"), //TODO
 		new Track(LineName.IND_QUEENS_BOULEVARD_LINE, TrackType.NORMAL, InternalDirection.PREVIOUS, true),
 		new Platform(PlatformType.SIDE, true),
-	]]),
+	]], [145.60, 439.73]),
 };
 
 const selfPointingStationObjectDefault = (name, boardings) => {return {[name]: new Station(name, [PLATFORM_SETS[name]], boardings)}};
@@ -281,40 +295,40 @@ const LINES = {
 const SERVICES = {
 	[Service.E]: [
 		// Full express
-		new ServicePattern("E Eighth Avenue Local", null, "Weekdays 7 AM to 7 PM", ServiceDirection.BOTH, new ServiceTime(ServiceType.NO, ServiceType.YES, ServiceType.YES, ServiceType.NO, ServiceType.NO, ServiceType.NO), [
+		new ServicePattern("E Eighth Avenue Local", EBullet, "Weekdays 7 AM to 7 PM", ServiceDirection.BOTH, new ServiceTime(ServiceType.NO, ServiceType.YES, ServiceType.YES, ServiceType.NO, ServiceType.NO, ServiceType.NO), [
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Briarwood", "Queens Plaza", TrackType.EXPRESS, []),
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Court Square-23rd Street", "50th Street", TrackType.NORMAL, []),
 		]),
 		// Express after forest hills
-		new ServicePattern("E Eighth Avenue Local", null, "Weekends all day, Weekdays 6 - 7 AM and 7 - 9:30 PM", ServiceDirection.BOTH, new ServiceTime(ServiceType.YES, ServiceType.NO, ServiceType.NO, ServiceType.YES, ServiceType.NO, ServiceType.YES), [
+		new ServicePattern("E Eighth Avenue Local", EBullet, "Weekends all day, Weekdays 6 - 7 AM and 7 - 9:30 PM", ServiceDirection.BOTH, new ServiceTime(ServiceType.YES, ServiceType.NO, ServiceType.NO, ServiceType.YES, ServiceType.NO, ServiceType.YES), [
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Briarwood", "75th Avenue", TrackType.LOCAL, []),
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Forest Hills-71st Avenue", "Queens Plaza", TrackType.EXPRESS, []),
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Court Square-23rd Street", "50th Street", TrackType.NORMAL, []),
 		]),
 		// Full local
 		// TODO need to describe late night service better
-		new ServicePattern("E Eighth Avenue Local", null, "10 PM - 5 AM (6 AM Weekends)", ServiceDirection.NORTH, new ServiceTime(ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.YES, ServiceType.NO), [
+		new ServicePattern("E Eighth Avenue Local", EBullet, "10 PM - 5 AM (6 AM Weekends)", ServiceDirection.NORTH, new ServiceTime(ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.YES, ServiceType.NO), [
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Briarwood", "36th Street", TrackType.LOCAL, []),
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Queens Plaza", "Queens Plaza", TrackType.EXPRESS, [], InternalDirection.PREVIOUS),
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Court Square-23rd Street", "50th Street", TrackType.NORMAL, []),
 		]),
-		new ServicePattern("E Eighth Avenue Local", null, "10 PM - 5 AM (6 AM Weekends)", ServiceDirection.SOUTH, new ServiceTime(ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.YES, ServiceType.NO), [
+		new ServicePattern("E Eighth Avenue Local", EBullet, "10 PM - 5 AM (6 AM Weekends)", ServiceDirection.SOUTH, new ServiceTime(ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.YES, ServiceType.NO), [
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Briarwood", "Queens Plaza", TrackType.LOCAL, [], InternalDirection.NEXT),
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Court Square-23rd Street", "50th Street", TrackType.NORMAL, []),
 		]),
 
 
 		// Select service
-		new ServicePattern("E Eighth Avenue Local", null, "Select rush hour trips", ServiceDirection.BOTH, new ServiceTime(ServiceType.NO, ServiceType.SELECT, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO), [
+		new ServicePattern("E Eighth Avenue Local", EBullet, "Select rush hour trips", ServiceDirection.BOTH, new ServiceTime(ServiceType.NO, ServiceType.SELECT, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO), [
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Jamaica-179th Street", "Queens Plaza", TrackType.EXPRESS, []),
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Court Square-23rd Street", "50th Street", TrackType.NORMAL, []),
 		]),
-		new ServicePattern("E Eighth Avenue Local", null, "Select Queens-bound evening trips", ServiceDirection.NORTH, new ServiceTime(ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.SELECT, ServiceType.NO, ServiceType.NO), [
+		new ServicePattern("E Eighth Avenue Local", EBullet, "Select Queens-bound evening trips", ServiceDirection.NORTH, new ServiceTime(ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.SELECT, ServiceType.NO, ServiceType.NO), [
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Jamaica-179th Street", "75th Avenue", TrackType.LOCAL, []),
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Forest Hills-71st Avenue", "Queens Plaza", TrackType.EXPRESS, []),
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Court Square-23rd Street", "50th Street", TrackType.NORMAL, []),
 		]),
-		new ServicePattern("E Eighth Avenue Local", null, "Queens-bound trips Saturdays 6:30 - 7:30 AM and Sundays 6:30 - 8:30 AM", ServiceDirection.NORTH, new ServiceTime(ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.SELECT), [
+		new ServicePattern("E Eighth Avenue Local", EBullet, "Queens-bound trips Saturdays 6:30 - 7:30 AM and Sundays 6:30 - 8:30 AM", ServiceDirection.NORTH, new ServiceTime(ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.SELECT), [
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Briarwood", "Elmhurst Avenue", TrackType.LOCAL, []),
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Jackson Heights-Roosevelt Avenue", "Queens Plaza", TrackType.EXPRESS, []),
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Court Square-23rd Street", "50th Street", TrackType.NORMAL, []),
@@ -322,45 +336,45 @@ const SERVICES = {
 	],
 
 	[Service.F]: [
-		new ServicePattern("F Queens Boulevard Express/Sixth Avenue Local", null, "Weekdays 5 AM - 10:30 PM, Saturdays 6 AM - 9 PM, Sundays 7 AM - 9 PM", ServiceDirection.BOTH, new ServiceTime(ServiceType.YES, ServiceType.YES, ServiceType.YES, ServiceType.YES, ServiceType.NO, ServiceType.YES), [
+		new ServicePattern("F Queens Boulevard Express/Sixth Avenue Local", FBullet, "Weekdays 5 AM - 10:30 PM, Saturdays 6 AM - 9 PM, Sundays 7 AM - 9 PM", ServiceDirection.BOTH, new ServiceTime(ServiceType.YES, ServiceType.YES, ServiceType.YES, ServiceType.YES, ServiceType.NO, ServiceType.YES), [
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Jamaica-179th Street", "75th Avenue", TrackType.LOCAL, []),
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Forest Hills-71st Avenue", "36th Street", TrackType.EXPRESS, []),
 		]),
 		// TODO need to describe late night service better
-		new ServicePattern("F Queens Boulevard Express/Sixth Avenue Local", null, "Weekdays 10:30 PM - 5 AM, Saturdays 6 AM - 9 PM", ServiceDirection.BOTH, new ServiceTime(ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.YES, ServiceType.NO), [
+		new ServicePattern("F Queens Boulevard Express/Sixth Avenue Local", FBullet, "Weekdays 10:30 PM - 5 AM, Saturdays 6 AM - 9 PM", ServiceDirection.BOTH, new ServiceTime(ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.YES, ServiceType.NO), [
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Jamaica-179th Street", "36th Street", TrackType.LOCAL, []),
 		]),
 
 		// Select service
 		// F express train
-		new ServicePattern("F Queens Boulevard Express/Sixth Avenue Local", null, "Rush hours, two trains in each direction", ServiceDirection.BOTH, new ServiceTime(ServiceType.NO, ServiceType.SELECT, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO), [
+		new ServicePattern("F Queens Boulevard Express/Sixth Avenue Local", FdBullet, "Rush hours, two trains in each direction", ServiceDirection.BOTH, new ServiceTime(ServiceType.NO, ServiceType.SELECT, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO), [
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Jamaica-179th Street", "75th Avenue", TrackType.LOCAL, []),
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Forest Hills-71st Avenue", "36th Street", TrackType.EXPRESS, []),
 		]),
-		new ServicePattern("F Queens Boulevard Express/Sixth Avenue Local", null, "Queens-bound trips Saturdays 6:30 - 7:30 AM and Sundays 6:30 - 8:30 AM", ServiceDirection.NORTH, new ServiceTime(ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.SELECT), [
+		new ServicePattern("F Queens Boulevard Express/Sixth Avenue Local", FBullet, "Queens-bound trips Saturdays 6:30 - 7:30 AM and Sundays 6:30 - 8:30 AM", ServiceDirection.NORTH, new ServiceTime(ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.SELECT), [
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Briarwood", "Elmhurst Avenue", TrackType.LOCAL, []),
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Jackson Heights-Roosevelt Avenue", "36th Street", TrackType.EXPRESS, []),
 		]),
 	],
 
 	[Service.R]: [
-		new ServicePattern("R Broadway Local", null, "Everyday 6 AM - 10:30 PM", ServiceDirection.BOTH, new ServiceTime(ServiceType.YES, ServiceType.YES, ServiceType.YES, ServiceType.YES, ServiceType.NO, ServiceType.YES), [
+		new ServicePattern("R Broadway Local", RBullet, "Everyday 6 AM - 10:30 PM", ServiceDirection.BOTH, new ServiceTime(ServiceType.YES, ServiceType.YES, ServiceType.YES, ServiceType.YES, ServiceType.NO, ServiceType.YES), [
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Forest Hills-71st Avenue", "Queens Plaza", TrackType.LOCAL, []),
 		]),
 
-		new ServicePattern("R Broadway Local", null, "Queens-bound trips 10 PM - Midnight", ServiceDirection.NORTH, new ServiceTime(ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.SELECT, ServiceType.NO, ServiceType.SELECT), [
+		new ServicePattern("R Broadway Local", RBullet, "Queens-bound trips 10 PM - Midnight", ServiceDirection.NORTH, new ServiceTime(ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.SELECT, ServiceType.NO, ServiceType.SELECT), [
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Queens Plaza", "Queens Plaza", TrackType.LOCAL, []),
 		]),
 	],
 
 	[Service.M]: [
-		new ServicePattern("M Queens Boulevard Local/Sixth Avenue Local", null, "Weekdays 6 AM - 9:30 PM", ServiceDirection.NORTH, new ServiceTime(ServiceType.YES, ServiceType.YES, ServiceType.YES, ServiceType.YES, ServiceType.NO, ServiceType.NO), [
+		new ServicePattern("M Queens Boulevard Local/Sixth Avenue Local", MBullet, "Weekdays 6 AM - 9:30 PM", ServiceDirection.NORTH, new ServiceTime(ServiceType.YES, ServiceType.YES, ServiceType.YES, ServiceType.YES, ServiceType.NO, ServiceType.NO), [
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Forest Hills-71st Avenue", "36th Street", TrackType.LOCAL, []),
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Queens Plaza", "Queens Plaza", TrackType.EXPRESS, [], InternalDirection.PREVIOUS),
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Court Square-23rd Street", "Fifth Avenue-53rd Street", TrackType.NORMAL, []),
 		]),
 
-		new ServicePattern("M Queens Boulevard Local/Sixth Avenue Local", null, "Weekdays 6 AM - 9:30 PM", ServiceDirection.SOUTH, new ServiceTime(ServiceType.YES, ServiceType.YES, ServiceType.YES, ServiceType.YES, ServiceType.NO, ServiceType.NO), [
+		new ServicePattern("M Queens Boulevard Local/Sixth Avenue Local", MBullet, "Weekdays 6 AM - 9:30 PM", ServiceDirection.SOUTH, new ServiceTime(ServiceType.YES, ServiceType.YES, ServiceType.YES, ServiceType.YES, ServiceType.NO, ServiceType.NO), [
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Forest Hills-71st Avenue", "Queens Plaza", TrackType.LOCAL, [], InternalDirection.NEXT),
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Court Square-23rd Street", "Fifth Avenue-53rd Street", TrackType.NORMAL, []),
 		]),

@@ -1,5 +1,6 @@
 import React, {useState} from "react";
 import {BrowserRouter, Route, Routes, Link, useSearchParams, useParams} from "react-router-dom";
+import {Background} from "./background.jsx";
 import {LINES, PLATFORM_SETS, SERVICES, STATIONS} from "../data/data.jsx";
 import {
 	ServiceType,
@@ -16,12 +17,14 @@ import {
 } from "../data/enums.jsx";
 import {serviceTimeEqual} from "../data/objects.jsx";
 
+// TODO investigate samplemap red and green paths
+
 function Subway({}){
 	return (
 		<BrowserRouter basename="subway">
 			<Routes>
-				<Route path="/*" element={<SubwayFocusExample />} />
-				<Route path="/" element={<SubwayFocusExample />} />
+				<Route path="/*" element={<SubwayMap />} />
+				<Route path="/" element={<SubwayMap />} />
 			</Routes>
 		</BrowserRouter>
 	);
@@ -71,10 +74,56 @@ function SubwayFocusExample({}){
 			{service && (<Service service={SERVICES[service]} select={select}/>)}
 			Stations:<br/>
 			<ul>
-			{Object.keys(STATIONS).map(lineName => (<li><span onClick={() => {updateSearchParams(setSearchParams, "ps", lineName)}}>{lineName}</span></li>))}
+			{Object.keys(PLATFORM_SETS).map(lineName => (<li><span onClick={() => {updateSearchParams(setSearchParams, "ps", lineName)}}>{lineName}</span></li>))}
 			</ul>
 		</>
 	);
+}
+
+function SubwayMap({}){
+	const [searchParams, setSearchParams] = useSearchParams();
+	const platformSet = searchParams.get("ps");
+	const service = searchParams.get("service");
+	const highlight = searchParams.get("highlight");
+	const select = searchParams.get("select") === "true" || false;
+	const [hover, setHover] = useState(null);
+	// highlight={platformSet === identifier}
+
+	return (
+		<span style={{"display": "flex"}}>
+			<svg
+			  xmlns="http://www.w3.org/2000/svg"
+			  id="svg10389"
+			  width="684.433"
+			  height="1038.043"
+			  version="1.1"
+			  style={{"flex": "12 0 auto"}}
+			  //style={{position: "absolute", ["z-index"]: "1", float: "left"}}
+			>
+				<Background/>														
+				{Object.entries(PLATFORM_SETS).map(([identifier, ps]) => (<PlatformSetDot platformSet={ps} setHover={(tr) => setHover(tr ? identifier : null)} setHighlight={() => updateSearchParams(setSearchParams, "ps", identifier)}/>))}
+			</svg>
+			{hover && (
+				<span style={{position: "absolute", left: PLATFORM_SETS[hover].position[0], top: PLATFORM_SETS[hover].position[1] + 8, transform: "translate(-50%, 0)"}}>
+					<PlatformSetPreview platformSet={PLATFORM_SETS[hover]} select={select}/>
+				</span>
+			)}
+			{platformSet && (
+				<span style={{"flex": "4 1 auto"}}>
+					{/*TODO change from platform set to station*/}
+					<Station station={STATIONS[platformSet]} select={select}/>
+				</span>
+			)}
+		</span>
+	);
+}
+
+//TODO could change highlight from string to bool
+function PlatformSetDot({platformSet, select, setHover, setHighlight}){
+	const {position: [xCoord, yCoord]} = platformSet;
+	return (
+		<ellipse onClick={setHighlight} onMouseEnter={() => {setHover(true)}} onMouseLeave={() => {setHover(false)}} style={{fill: "#0dc122", stroke: "stroke: rgb(0, 0, 0)"}} cx={xCoord} cy={yCoord} rx="3" ry="3" transform="matrix(1, 0, 0, 1, 0, -7.105427357601002e-15)"/>
+	)
 }
 
 function Station({station, select}){
@@ -96,6 +145,16 @@ function Station({station, select}){
 			{boardings} boardings, {ordinal(rank)} of {Object.values(STATIONS).length}<br/>
 			{platformSets.map((platformSet => <PlatformSet platformSet={platformSet} select={select}/>))}<br/>
 		</>
+	);
+}
+
+// TODO change name to platformset?
+function PlatformSetPreview({platformSet, select}){
+	const {name, type, odt, layout, platformName} = platformSet;
+	return (
+		<div style={{"background-color": "#000000", "color": "#FFFFFF", "font-family": "Helvetica", "font-weight": "bold", "border-top": "10px solid black", "box-shadow": "inset 0 2px white", "padding": "2px 10px"}}>
+			{name}
+		</div>
 	);
 }
 
