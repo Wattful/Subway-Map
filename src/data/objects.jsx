@@ -108,7 +108,7 @@ function serviceTimeEqual(service1, service2){
 function ServiceTimeStops(nextStopService, lastStopService){
 	this.nextStopService = nextStopService;
 	this.lastStopService = lastStopService;
-	// TODO could do a "protected function"?
+	// TODO could do a "protected function"? or this could be completely separated
 	this.serviceTime = null;
 }
 
@@ -119,9 +119,8 @@ function ServiceTimeStops(nextStopService, lastStopService){
 
 const accumulateServiceTime = (patterns) => patterns.reduce((base, next) => (next === null ? base : new ServiceTime(Math.max(base.earlyMorning, next.earlyMorning), Math.max(base.rushHour, next.rushHour), Math.max(base.midday, next.midday), Math.max(base.evening, next.evening), Math.max(base.lateNights, next.lateNights), Math.max(base.weekends, next.weekends))), new ServiceTime(ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO));
 
-function ServicePattern(name, bullet, serviceDescription, serviceDirection, serviceTime, route){
+function ServicePattern(name, serviceDescription, serviceDirection, serviceTime, route){
 	this.name = name;
-	this.Bullet = bullet;
 	this.serviceDescription = serviceDescription;
 	this.serviceDirection = serviceDirection;
 	this.serviceTime = serviceTime;

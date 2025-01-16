@@ -2,6 +2,7 @@ import React, {useState} from "react";
 import {BrowserRouter, Route, Routes, Link, useSearchParams, useParams} from "react-router-dom";
 import {Background} from "./background.jsx";
 import {LINES, PLATFORM_SETS, SERVICES, STATIONS} from "../data/data.jsx";
+import {BULLETS} from "../data/bullets.jsx";
 import {
 	ServiceType,
 	LineName,
@@ -151,9 +152,24 @@ function Station({station, select}){
 // TODO change name to platformset?
 function PlatformSetPreview({platformSet, select}){
 	const {name, type, odt, layout, platformName} = platformSet;
+	const bullets = new Set();
+	for(const floor of layout){
+		for(const element of floor){
+			if(element.category !== "Track" || !element.stops){
+				continue;
+			}
+			for(const [service, {serviceTime}] of Object.entries(element.service)){
+				// TODO order, MAKE THIS A SEPARATE FUNCTION NOTE: late nights omitted on purpose
+				if(select || [serviceTime.earlyMorning, serviceTime.rushHour, serviceTime.midday, serviceTime.evening, serviceTime.weekends].some(t => t === ServiceType.YES)){
+					bullets.add(service);
+				}
+			}
+		}
+	}
 	return (
 		<div style={{"background-color": "#000000", "color": "#FFFFFF", "font-family": "Helvetica", "font-weight": "bold", "border-top": "10px solid black", "box-shadow": "inset 0 2px white", "padding": "2px 10px"}}>
-			{name}
+			{name}<br/>
+			{Array.from(bullets).toSorted().map(bullet => (BULLETS[bullet]()))}
 		</div>
 	);
 }
@@ -188,7 +204,7 @@ function Track({track, select}){
 				const {serviceTime} = serviceTimeStops;
 				// TODO multiple spaces?
 				if(select){
-					return <>{`${name} ${serviceTimeString(serviceTime, ServiceType.YES)} ${serviceTimeString(serviceTime, ServiceType.SELECT)}`} <NextLastStops serviceTimeStops={serviceTimeStops} select={select}/><br/></>;
+					return <>{BULLETS[name]()}{`${serviceTimeString(serviceTime, ServiceType.YES)} ${serviceTimeString(serviceTime, ServiceType.SELECT)}`} <NextLastStops serviceTimeStops={serviceTimeStops} select={select}/><br/></>;
 				} else {
 					// Assumption that we will not receive a pattern with all times set to NO
 					return [serviceTime.earlyMorning, serviceTime.rushHour, serviceTime.midday, serviceTime.evening, serviceTime.lateNights, serviceTime.weekends].some(t => t === ServiceType.YES) ? <>{`${name} ${serviceTimeString(serviceTime, ServiceType.YES)}`} <NextLastStops serviceTimeStops={serviceTimeStops} select={select}/><br/></> : "";

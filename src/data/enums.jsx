@@ -54,6 +54,7 @@ const LineName = Enum({
 	IRT_WHITE_PLAINS_ROAD_LINE: "IRT White Plains Road Line",
 });
 
+// TODO "d" services are a temp solution
 const Service = Enum({
 	A: "A",
 	B: "B",
@@ -61,6 +62,7 @@ const Service = Enum({
 	D: "D",
 	E: "E",
 	F: "F",
+	Fd: "Fd",
 	G: "G",
 	ROCKAWAY_PARK_SHUTTLE: "H",
 	J: "J",
@@ -78,7 +80,9 @@ const Service = Enum({
 	"4": "4",
 	"5": "5",
 	"6": "6",
+	"6d": "6d",
 	"7": "7",
+	"7d": "7d",
 });
 
 const PlatformSetType = Enum({

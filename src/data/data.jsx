@@ -295,40 +295,40 @@ const LINES = {
 const SERVICES = {
 	[Service.E]: [
 		// Full express
-		new ServicePattern("E Eighth Avenue Local", EBullet, "Weekdays 7 AM to 7 PM", ServiceDirection.BOTH, new ServiceTime(ServiceType.NO, ServiceType.YES, ServiceType.YES, ServiceType.NO, ServiceType.NO, ServiceType.NO), [
+		new ServicePattern("E Eighth Avenue Local", "Weekdays 7 AM to 7 PM", ServiceDirection.BOTH, new ServiceTime(ServiceType.NO, ServiceType.YES, ServiceType.YES, ServiceType.NO, ServiceType.NO, ServiceType.NO), [
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Briarwood", "Queens Plaza", TrackType.EXPRESS, []),
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Court Square-23rd Street", "50th Street", TrackType.NORMAL, []),
 		]),
 		// Express after forest hills
-		new ServicePattern("E Eighth Avenue Local", EBullet, "Weekends all day, Weekdays 6 - 7 AM and 7 - 9:30 PM", ServiceDirection.BOTH, new ServiceTime(ServiceType.YES, ServiceType.NO, ServiceType.NO, ServiceType.YES, ServiceType.NO, ServiceType.YES), [
+		new ServicePattern("E Eighth Avenue Local", "Weekends all day, Weekdays 6 - 7 AM and 7 - 9:30 PM", ServiceDirection.BOTH, new ServiceTime(ServiceType.YES, ServiceType.NO, ServiceType.NO, ServiceType.YES, ServiceType.NO, ServiceType.YES), [
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Briarwood", "75th Avenue", TrackType.LOCAL, []),
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Forest Hills-71st Avenue", "Queens Plaza", TrackType.EXPRESS, []),
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Court Square-23rd Street", "50th Street", TrackType.NORMAL, []),
 		]),
 		// Full local
 		// TODO need to describe late night service better
-		new ServicePattern("E Eighth Avenue Local", EBullet, "10 PM - 5 AM (6 AM Weekends)", ServiceDirection.NORTH, new ServiceTime(ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.YES, ServiceType.NO), [
+		new ServicePattern("E Eighth Avenue Local", "10 PM - 5 AM (6 AM Weekends)", ServiceDirection.NORTH, new ServiceTime(ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.YES, ServiceType.NO), [
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Briarwood", "36th Street", TrackType.LOCAL, []),
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Queens Plaza", "Queens Plaza", TrackType.EXPRESS, [], InternalDirection.PREVIOUS),
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Court Square-23rd Street", "50th Street", TrackType.NORMAL, []),
 		]),
-		new ServicePattern("E Eighth Avenue Local", EBullet, "10 PM - 5 AM (6 AM Weekends)", ServiceDirection.SOUTH, new ServiceTime(ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.YES, ServiceType.NO), [
+		new ServicePattern("E Eighth Avenue Local", "10 PM - 5 AM (6 AM Weekends)", ServiceDirection.SOUTH, new ServiceTime(ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.YES, ServiceType.NO), [
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Briarwood", "Queens Plaza", TrackType.LOCAL, [], InternalDirection.NEXT),
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Court Square-23rd Street", "50th Street", TrackType.NORMAL, []),
 		]),
 
 
 		// Select service
-		new ServicePattern("E Eighth Avenue Local", EBullet, "Select rush hour trips", ServiceDirection.BOTH, new ServiceTime(ServiceType.NO, ServiceType.SELECT, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO), [
+		new ServicePattern("E Eighth Avenue Local", "Select rush hour trips", ServiceDirection.BOTH, new ServiceTime(ServiceType.NO, ServiceType.SELECT, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO), [
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Jamaica-179th Street", "Queens Plaza", TrackType.EXPRESS, []),
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Court Square-23rd Street", "50th Street", TrackType.NORMAL, []),
 		]),
-		new ServicePattern("E Eighth Avenue Local", EBullet, "Select Queens-bound evening trips", ServiceDirection.NORTH, new ServiceTime(ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.SELECT, ServiceType.NO, ServiceType.NO), [
+		new ServicePattern("E Eighth Avenue Local", "Select Queens-bound evening trips", ServiceDirection.NORTH, new ServiceTime(ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.SELECT, ServiceType.NO, ServiceType.NO), [
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Jamaica-179th Street", "75th Avenue", TrackType.LOCAL, []),
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Forest Hills-71st Avenue", "Queens Plaza", TrackType.EXPRESS, []),
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Court Square-23rd Street", "50th Street", TrackType.NORMAL, []),
 		]),
-		new ServicePattern("E Eighth Avenue Local", EBullet, "Queens-bound trips Saturdays 6:30 - 7:30 AM and Sundays 6:30 - 8:30 AM", ServiceDirection.NORTH, new ServiceTime(ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.SELECT), [
+		new ServicePattern("E Eighth Avenue Local", "Queens-bound trips Saturdays 6:30 - 7:30 AM and Sundays 6:30 - 8:30 AM", ServiceDirection.NORTH, new ServiceTime(ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.SELECT), [
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Briarwood", "Elmhurst Avenue", TrackType.LOCAL, []),
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Jackson Heights-Roosevelt Avenue", "Queens Plaza", TrackType.EXPRESS, []),
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Court Square-23rd Street", "50th Street", TrackType.NORMAL, []),
@@ -336,45 +336,47 @@ const SERVICES = {
 	],
 
 	[Service.F]: [
-		new ServicePattern("F Queens Boulevard Express/Sixth Avenue Local", FBullet, "Weekdays 5 AM - 10:30 PM, Saturdays 6 AM - 9 PM, Sundays 7 AM - 9 PM", ServiceDirection.BOTH, new ServiceTime(ServiceType.YES, ServiceType.YES, ServiceType.YES, ServiceType.YES, ServiceType.NO, ServiceType.YES), [
+		new ServicePattern("F Queens Boulevard Express/Sixth Avenue Local", "Weekdays 5 AM - 10:30 PM, Saturdays 6 AM - 9 PM, Sundays 7 AM - 9 PM", ServiceDirection.BOTH, new ServiceTime(ServiceType.YES, ServiceType.YES, ServiceType.YES, ServiceType.YES, ServiceType.NO, ServiceType.YES), [
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Jamaica-179th Street", "75th Avenue", TrackType.LOCAL, []),
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Forest Hills-71st Avenue", "36th Street", TrackType.EXPRESS, []),
 		]),
 		// TODO need to describe late night service better
-		new ServicePattern("F Queens Boulevard Express/Sixth Avenue Local", FBullet, "Weekdays 10:30 PM - 5 AM, Saturdays 6 AM - 9 PM", ServiceDirection.BOTH, new ServiceTime(ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.YES, ServiceType.NO), [
+		new ServicePattern("F Queens Boulevard Express/Sixth Avenue Local", "Weekdays 10:30 PM - 5 AM, Saturdays 6 AM - 9 PM", ServiceDirection.BOTH, new ServiceTime(ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.YES, ServiceType.NO), [
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Jamaica-179th Street", "36th Street", TrackType.LOCAL, []),
 		]),
 
-		// Select service
-		// F express train
-		new ServicePattern("F Queens Boulevard Express/Sixth Avenue Local", FdBullet, "Rush hours, two trains in each direction", ServiceDirection.BOTH, new ServiceTime(ServiceType.NO, ServiceType.SELECT, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO), [
-			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Jamaica-179th Street", "75th Avenue", TrackType.LOCAL, []),
-			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Forest Hills-71st Avenue", "36th Street", TrackType.EXPRESS, []),
-		]),
-		new ServicePattern("F Queens Boulevard Express/Sixth Avenue Local", FBullet, "Queens-bound trips Saturdays 6:30 - 7:30 AM and Sundays 6:30 - 8:30 AM", ServiceDirection.NORTH, new ServiceTime(ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.SELECT), [
+		// Select service,
+		new ServicePattern("F Queens Boulevard Express/Sixth Avenue Local", "Queens-bound trips Saturdays 6:30 - 7:30 AM and Sundays 6:30 - 8:30 AM", ServiceDirection.NORTH, new ServiceTime(ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.SELECT), [
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Briarwood", "Elmhurst Avenue", TrackType.LOCAL, []),
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Jackson Heights-Roosevelt Avenue", "36th Street", TrackType.EXPRESS, []),
 		]),
 	],
 
+	[Service.Fd]: [// F express train
+		new ServicePattern("F Queens Boulevard Express/Sixth Avenue Local", "Rush hours, two trains in each direction", ServiceDirection.BOTH, new ServiceTime(ServiceType.NO, ServiceType.SELECT, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO), [
+			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Jamaica-179th Street", "75th Avenue", TrackType.LOCAL, []),
+			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Forest Hills-71st Avenue", "36th Street", TrackType.EXPRESS, []),
+		])
+	],
+
 	[Service.R]: [
-		new ServicePattern("R Broadway Local", RBullet, "Everyday 6 AM - 10:30 PM", ServiceDirection.BOTH, new ServiceTime(ServiceType.YES, ServiceType.YES, ServiceType.YES, ServiceType.YES, ServiceType.NO, ServiceType.YES), [
+		new ServicePattern("R Broadway Local", "Everyday 6 AM - 10:30 PM", ServiceDirection.BOTH, new ServiceTime(ServiceType.YES, ServiceType.YES, ServiceType.YES, ServiceType.YES, ServiceType.NO, ServiceType.YES), [
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Forest Hills-71st Avenue", "Queens Plaza", TrackType.LOCAL, []),
 		]),
 
-		new ServicePattern("R Broadway Local", RBullet, "Queens-bound trips 10 PM - Midnight", ServiceDirection.NORTH, new ServiceTime(ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.SELECT, ServiceType.NO, ServiceType.SELECT), [
+		new ServicePattern("R Broadway Local", "Queens-bound trips 10 PM - Midnight", ServiceDirection.NORTH, new ServiceTime(ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.SELECT, ServiceType.NO, ServiceType.SELECT), [
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Queens Plaza", "Queens Plaza", TrackType.LOCAL, []),
 		]),
 	],
 
 	[Service.M]: [
-		new ServicePattern("M Queens Boulevard Local/Sixth Avenue Local", MBullet, "Weekdays 6 AM - 9:30 PM", ServiceDirection.NORTH, new ServiceTime(ServiceType.YES, ServiceType.YES, ServiceType.YES, ServiceType.YES, ServiceType.NO, ServiceType.NO), [
+		new ServicePattern("M Queens Boulevard Local/Sixth Avenue Local", "Weekdays 6 AM - 9:30 PM", ServiceDirection.NORTH, new ServiceTime(ServiceType.YES, ServiceType.YES, ServiceType.YES, ServiceType.YES, ServiceType.NO, ServiceType.NO), [
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Forest Hills-71st Avenue", "36th Street", TrackType.LOCAL, []),
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Queens Plaza", "Queens Plaza", TrackType.EXPRESS, [], InternalDirection.PREVIOUS),
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Court Square-23rd Street", "Fifth Avenue-53rd Street", TrackType.NORMAL, []),
 		]),
 
-		new ServicePattern("M Queens Boulevard Local/Sixth Avenue Local", MBullet, "Weekdays 6 AM - 9:30 PM", ServiceDirection.SOUTH, new ServiceTime(ServiceType.YES, ServiceType.YES, ServiceType.YES, ServiceType.YES, ServiceType.NO, ServiceType.NO), [
+		new ServicePattern("M Queens Boulevard Local/Sixth Avenue Local", "Weekdays 6 AM - 9:30 PM", ServiceDirection.SOUTH, new ServiceTime(ServiceType.YES, ServiceType.YES, ServiceType.YES, ServiceType.YES, ServiceType.NO, ServiceType.NO), [
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Forest Hills-71st Avenue", "Queens Plaza", TrackType.LOCAL, [], InternalDirection.NEXT),
 			new ServiceSlice(LineName.IND_QUEENS_BOULEVARD_LINE, "Court Square-23rd Street", "Fifth Avenue-53rd Street", TrackType.NORMAL, []),
 		]),
