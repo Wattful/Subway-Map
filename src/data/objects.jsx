@@ -25,59 +25,60 @@ function Track(line, type, direction, stops){
 	this.service = {}; // Map from service to servicetime
 }
 
-function Platform(type, accessible){
+function Platform(type, accessible, service){
 	this.category = "Platform";
 	this.type = type;
 	if(typeof accessible !== "boolean"){
 		throw new Error(`"${stops}" is not a boolean`);
 	}
 	this.accessible = accessible;
+	this.service = service;
 }
 
-function PlatformSet(name, type, odt, opened, layout, position){
+function PlatformSet(name, type, opened, layout, coordinates){
 	this.category = "PlatformSet";
 	this.name = name;
 	this.type = type;
-	if(typeof odt !== "boolean" && odt !== null){
-		throw new Error(`"${odt}" is not a boolean or null`);
-	}
-	this.odt = odt
 	// if(!(opened instanceof Date)){ // TODO ???
 	// 	throw new Error(`"${opened}" is not a date`)
 	// }
-	this.opened = opened
+	this.opened = opened;
 	// TODO verification function?
-	this.layout = layout
-	this.position = position
+	this.layout = layout;
+	this.coordinates = coordinates;
+	this.lines = [];
 	this.platformName = null;
+	this.stationKey = null;
 }
 
-function Line(name, division, map){
+function Line(name, trackSegments){
 	this.name = name;
-	// TODO verification function?
-	this.map = map; 
+	this.trackSegments = trackSegments; 
 }
 
-function Station(name, platformSets, boardings){
+function Station(name, platformSets, boardings, odt){
 	this.name = name;
 	this.platformSets = platformSets;
 	this.boardings = boardings;
+	this.odt = odt;
 	this.rank = null;
 }
 
-function TrackInformation(type, signaling, obf, opened, used_tracks, unused_tracks){
-	this.category = "TrackInformation";
+function TrackSegment(id, line, platformSets, division, type, signaling, obf, opened, used_tracks, unused_tracks, start, end, d){
+	this.id = id;
+	this.line = line;
+	this.platformSets = platformSets;
+	this.division = division;
 	this.type = type;
 	this.signaling = signaling;
 	this.obf = obf;
 	this.opened = opened;
 	this.used_tracks = used_tracks;
 	this.unused_tracks = unused_tracks;
-}
-
-function TrackInformationDiff(diff){
-	this.category = "TrackInformationDiff";
-	this.diff = diff
+	this.total_tracks = used_tracks + unused_tracks;
+	this.start = start;
+	this.end = end;
+	this.d = d;
 }
 
 // TODO need to figure this out
@@ -119,22 +120,35 @@ function ServiceTimeStops(nextStopService, lastStopService){
 
 const accumulateServiceTime = (patterns) => patterns.reduce((base, next) => (next === null ? base : new ServiceTime(Math.max(base.earlyMorning, next.earlyMorning), Math.max(base.rushHour, next.rushHour), Math.max(base.midday, next.midday), Math.max(base.evening, next.evening), Math.max(base.lateNights, next.lateNights), Math.max(base.weekends, next.weekends))), new ServiceTime(ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO));
 
-function ServicePattern(name, serviceDescription, serviceDirection, serviceTime, route){
+function ServicePattern(name, serviceDescription, serviceDirection, serviceTime, route, skips){
 	this.name = name;
 	this.serviceDescription = serviceDescription;
 	this.serviceDirection = serviceDirection;
 	this.serviceTime = serviceTime;
 	this.route = route;
+	this.skips = skips;
 	this.compiledRoute = null;
 }
 
-function ServiceSlice(line, from, to, type, skips, internalDirection=InternalDirection.BOTH){
-	this.line = line;
-	this.from = from; // TODO assert member?
-	this.to = to;
+// function ServiceSlice(line, from, to, type, skips, internalDirection=InternalDirection.BOTH){
+// 	this.line = line;
+// 	this.from = from; // TODO assert member?
+// 	this.to = to;
+// 	this.type = type;
+// 	this.skips = skips;
+// 	this.internalDirection = internalDirection; // Even for patterns that run only in one direction this is only needed for slices that pass through <= 1 stations and their counterparts if any
+// }
+
+// function ServiceSlice(trackSegments, type, skips, internalDirection=InternalDirection.BOTH){
+// 	this.trackSegments = trackSegments;
+// 	this.type = type;
+// 	this.skips = skips;
+// 	this.internalDirection = internalDirection; // Even for patterns that run only in one direction this is only needed for slices that pass through <= 1 stations and their counterparts if any
+// }
+
+function SegmentServiceType(trackSegment, type){
+	this.trackSegment = trackSegment;
 	this.type = type;
-	this.skips = skips;
-	this.internalDirection = internalDirection; // Even for patterns that run only in one direction this is only needed for slices that pass through <= 1 stations and their counterparts if any
 }
 
 function ServiceStop(stop, trackNext, trackPrevious){
@@ -158,15 +172,14 @@ export {
 	PlatformSet,
 	Line,
 	Station,
-	TrackInformation,
-	TrackInformationDiff,
+	TrackSegment,
 	Junction,
 	ServiceTime,
 	serviceTimeEqual,
 	ServiceTimeStops,
 	accumulateServiceTime,
 	ServicePattern,
-	ServiceSlice,
+	SegmentServiceType,
 	ServiceStop,
 	Miscellaneous,
 	categorySearchFunction,

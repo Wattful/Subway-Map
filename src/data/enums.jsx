@@ -17,7 +17,7 @@ function Enum(baseEnum) {
 
 const LineName = Enum({
 	IRT_42ND_STREET_LINE: "IRT 42nd Street Line",
-	IRT_42ND_STREET_LINE: "BMT 63rd Street Line",
+	BMT_63RD_STREET_LINE: "BMT 63rd Street Line",
 	IND_63RD_STREET_LINE: "IND 63rd Street Line",
 	BMT_ARCHER_AVENUE_LINE: "BMT Archer Avenue Line",
 	IND_ARCHER_AVENUE_LINE: "IND Archer Avenue Line",
@@ -107,6 +107,12 @@ const PlatformType = Enum({
 	SIDE: "Side",
 });
 
+const PlatformService = Enum({
+	UP: "Up",
+	DOWN: "Down",
+	BOTH: "Both",
+});
+
 const InternalDirection = Enum({ // TODO might change
 	NEXT: "Next",
 	PREVIOUS: "Previous",
@@ -122,6 +128,7 @@ const ServiceDirection = Enum({
 const Division = Enum({
 	A: "A",
 	B: "B",
+	BOTH: "Both"
 });
 
 const SignalingType = Enum({
@@ -156,6 +163,7 @@ export {
 	PlatformSetType,
 	TrackType,
 	PlatformType,
+	PlatformService,
 	InternalDirection,
 	ServiceDirection,
 	Division,
