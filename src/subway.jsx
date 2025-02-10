@@ -1,8 +1,8 @@
 import React, {useState} from "react";
 import {BrowserRouter, Route, Routes, Link, useSearchParams, useParams} from "react-router-dom";
 import {Background} from "./background.jsx";
-import {TRACK_SEGMENTS, PLATFORM_SETS, SERVICES, STATIONS, MIN_BOARDINGS} from "../data/data.jsx";
-import {BULLETS} from "../data/bullets.jsx";
+import {TRACK_SEGMENTS, PLATFORM_SETS, SERVICES, STATIONS, MIN_BOARDINGS} from "./data.jsx";
+import {BULLETS} from "./bullets.jsx";
 import {
 	ServiceType,
 	LineName,
@@ -16,10 +16,10 @@ import {
 	SignalingType,
 	JunctionType,
 	BuiltFor
-} from "../data/enums.jsx";
-import {serviceTimeEqual} from "../data/objects.jsx";
+} from "./enums.jsx";
+import {serviceTimeEqual} from "./objects.jsx";
 
-// Final TODO: style <hr/>
+// Final TODO: separation between floors, try track description on side
 
 function Subway({}){
 	return (

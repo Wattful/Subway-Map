@@ -1,7 +1,7 @@
 import React, {useState, useEffect} from "react";
 import {createRoot} from "react-dom/client"
 import axios from "axios";
-import {Subway} from "./render/subway.jsx";
+import {Subway} from "./subway.jsx";
 
 const rpc = axios.create({
   baseURL: '//localhost:8000',
