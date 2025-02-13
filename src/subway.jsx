@@ -217,7 +217,7 @@ function Station({station, select}){
 				{name}<br/>
 				{Array.from(bullets).toSorted().map(bullet => (BULLETS[bullet]()))}
 			</div>
-			{boardings.toLocaleString()} boardings, {ordinal(rank)} of {Object.values(STATIONS).length}<br/>
+			{boardings.toLocaleString()} boardings (2023), {ordinal(rank)} of {Object.values(STATIONS).length}<br/>
 			Opposite direction transfer: {{true: "Yes", false: "No", null: "N/A"}[odt]}<br/><br/>
 			{platformSets.map((platformSet => <PlatformSet platformSet={platformSet} select={select}/>))}<br/>
 		</>
@@ -251,24 +251,30 @@ function PlatformSetPreview({platformSet, select}){
 
 function PlatformSet({platformSet, select}){
 	const {name, type, odt, opened, layout, platformName, lines} = platformSet;
+	// Ideas: render background as dark or brown color to represent the ground, render track description (ie "westbound local") to the side, by default show services lined up then expand
 	return (
 		<>
 			{/* TODO add platformName */}
-			<div> <span style={{"font-weight": "bold"}}>{lines.join(", ")} Platforms</span> ({type}, Opened {opened.toLocaleString()})</div>
+			<div style={{"margin-bottom": "4px"}}> <span style={{"font-weight": "bold"}}>{lines.join(", ")} Platforms</span> ({type}, Opened {opened.toLocaleString()})</div>
 			{layout.map((floor, index) => (
 				<>
 					{layout.length > 1 && (<><span style={{"font-style" : "italic"}}>Floor {type === PlatformSetType.UNDERGROUND ? "B" : ""}{index + 1}</span><br/></>) /*TODO label floor*/}
 					{floor.map((element, index2) => (
 						<>
+							{element.category !== "Platform" && index2 === 0 && <hr style={{"border-top-width": "3px", "border-color": "#888888"}}/>}
 							<div style={{margin: "2px 0px"}}>
 								{element.category === "Track" && <Track track={element} select={select}/>}
 								{element.category === "Platform" && <Platform platform={element}/>}
 								{element.category === "Misc" && element.description}
 							</div>
-							{index2 !== floor.length - 1 && element.category === "Track" && floor[index2 + 1].category === "Track" && <hr style={{"border-top-width": "3px", "border-color": "#888888"}}/>}
+							{element.category !== "Platform" && (index2 === floor.length - 1 || floor[index2 + 1].category !== "Platform") && <hr style={{"margin-top": "6px", "border-top-width": "3px", "border-color": "#888888"}}/>}
 						</>
 					))}
-					{index !== layout.length - 1 && <br/>}
+					{index !== layout.length - 1 && (
+						<>{/* Idea: render this as stairs? */}
+							<hr style={{margin: "20px 0px 8px 0px", "height": "6px", "border-top-width": "2px", "background-color":"white", "border-bottom-width": "2px", "border-color": "#CCCCCC"}}/>
+						</>
+					)}
 				</>
 			))}
 		</>
