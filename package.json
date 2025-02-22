@@ -10,7 +10,8 @@
     "luxon": "^3.5.0"
   },
   "scripts": {
-    "start": "react-scripts start"
+    "start": "react-scripts start",
+    "build": "react-scripts build"
   },
   "browserslist": {
     "production": [
@@ -24,5 +25,5 @@
       "last 1 safari version"
     ]
   },
-  "homepage": "/subway"
+  "homepage": "/Subway-Map"
 }

@@ -23,7 +23,7 @@ import {serviceTimeEqual} from "./objects.jsx";
 
 function Subway({}){
 	return (
-		<BrowserRouter basename="subway">
+		<BrowserRouter>
 			<Routes>
 				<Route path="/*" element={<SubwayMap />} />
 				<Route path="/" element={<SubwayMap />} />
