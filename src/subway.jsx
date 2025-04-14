@@ -32,17 +32,20 @@ function Subway({}){
 	);
 }
 
-const selfPointingTrackAttributeObject = (attribute, name, options) => {return {[attribute]: new TrackAttribute(attribute, name, options)}};
-const TRACK_ATTRIBUTES = {
-	...selfPointingTrackAttributeObject("total_tracks", "Total Tracks", [1, 2, 3, 4, 6, 8]),
-	...selfPointingTrackAttributeObject("used_tracks", "Used Tracks", [0, 1, 2, 3, 4, 6, 8]),
-	...selfPointingTrackAttributeObject("unused_tracks", "Unused Tracks", [0, 1, 2]),
-	//...selfPointingTrackAttributeObject("Date Opened", ["TBD"]), TODO
-	...selfPointingTrackAttributeObject("obf", "Originally Built For", Object.values(BuiltFor)),
-	...selfPointingTrackAttributeObject("type", "Track Type", Object.values(PlatformSetType)),
-	...selfPointingTrackAttributeObject("division", "Division", Object.values(Division)),
-	...selfPointingTrackAttributeObject("signaling", "Signaling Type", Object.values(SignalingType)),
-}
+const selfPointingTrackAttributeObject = (attribute, name, visible, options) => {return {[attribute]: new TrackAttribute(attribute, name, visible, options)}};
+const trackAttributesBase = [
+	new TrackAttribute("total_tracks", "Total Tracks", true, [1, 2, 3, 4, 6, 8]),
+	new TrackAttribute("used_tracks", "Used Tracks", true, [0, 1, 2, 3, 4, 6, 8]),
+	new TrackAttribute("unused_tracks", "Unused Tracks", true, [0, 1, 2]),
+	//new TrackAttribute("Date Opened", ["TBD"]), true, TODO
+	new TrackAttribute("obf", "Originally Built For", true, Object.values(BuiltFor)),
+	new TrackAttribute("type", "Track Type", true, Object.values(PlatformSetType)),
+	new TrackAttribute("division", "Division", true, Object.values(Division)),
+	new TrackAttribute("signaling", "Signaling Type", true, Object.values(SignalingType)),
+	new TrackAttribute("service", "Service", false, [null, ...Object.values(TrackType)]), // TODO hide from menu and implement service highlighting
+];
+const TRACK_ATTRIBUTES = Object.fromEntries(trackAttributesBase.map(attr => [attr.attribute, attr]));
+const TRACK_ATTRIBUTES_NAME_MAP = Object.fromEntries(trackAttributesBase.map(attr => [attr.name, attr]));
 
 const NORTH = 40.9268;
 const SOUTH = 40.5399;
@@ -52,18 +55,40 @@ const WIDTH = 648;
 const HEIGHT = 792;
 const coordinatesToPixels = ({lat, lon}) => {return {x: (lon - WEST) * (WIDTH / (EAST - WEST)), y: -(lat - NORTH) * (HEIGHT / (NORTH - SOUTH))}};
 
-
 function SubwayMap({}){
 	const [searchParams, setSearchParams] = useSearchParams();
-	const platformSet = searchParams.get("ps");
-	const service = searchParams.get("service");
+	const focusType = searchParams.get("ftype");
+	const focusValue = searchParams.get("fvalue");
 	const attribute = searchParams.get("attribute");
 	const select = searchParams.get("select") === "true" || false;
 	const scale = searchParams.get("scale") === "true" || false;
-	//const highlightValue = searchParams.get("highlightValue");
-	const [hover, setHover] = useState(null);
+	const pattern = searchParams.get("pattern");
+	const [psHover, setPsHover] = useState(null);
+	const [patternHover, setPatternHover] = useState(null);
 	const [highlightValue, setHighlightValue] = useState(null);
-	const highlight = attribute ? {...TRACK_ATTRIBUTES[attribute], highlightValue} : null;
+	const highlight = attribute || pattern || patternHover !== null ? {...TRACK_ATTRIBUTES[(pattern || patternHover !== null) ? "service" : attribute], highlightValue} : null;
+	const setFocus = (type, doubleclick=false) => {
+		return value => {
+			if(!value || doubleclick && value === focusValue){
+				updateSearchParams(setSearchParams, "ftype", null);
+				updateSearchParams(setSearchParams, "fvalue", null);
+			} else {
+				updateSearchParams(setSearchParams, "ftype", type);
+				updateSearchParams(setSearchParams, "fvalue", value);
+			}
+		}
+	}
+
+	const getAttributes = segment => {
+		let extraAttributes = {}
+		const {id, d, ...attributes} = segment;
+		let pat = patternHover === null ? pattern : patternHover;
+		if(pat !== null){
+			const segmentServiceType = SERVICES[focusValue][pat].route.find(({trackSegment}) => trackSegment === id);
+			extraAttributes = {service: segmentServiceType ? segmentServiceType.type : null};
+		}
+		return {...attributes, ...extraAttributes};
+	}
 
 	return (
 		<span style={{"display": "flex", "flex": "1 1 auto", position: "relative"}}>
@@ -78,12 +103,12 @@ function SubwayMap({}){
 				style={{"flex": "0 0 auto", "z-index": "0"}}
 			>
 				<Background />														
-				{Object.values(TRACK_SEGMENTS).map(({id, d, ...attributes}) => <TrackSegmentSvg id={id} d={d} attributes={attributes} highlight={highlight}/>)}
-				{Object.entries(PLATFORM_SETS).toSorted((a, b) => b.boardings - a.boardings).map(([identifier, ps]) => (<PlatformSetDot platformSet={ps} scale={scale} setHover={(tr) => setHover(tr ? identifier : null)} setHighlight={() => {updateSearchParams(setSearchParams, "ps", identifier)}}/>))}
+				{Object.values(TRACK_SEGMENTS).map(segment => <TrackSegmentSvg id={segment.id} d={segment.d} attributes={getAttributes(segment)} highlight={highlight}/>)}
+				{Object.entries(PLATFORM_SETS).toSorted((a, b) => b.boardings - a.boardings).map(([identifier, ps]) => (<PlatformSetDot platformSet={ps} scale={scale} setPsHover={(tr) => setPsHover(tr ? identifier : null)} setFocus={() => setFocus("ps", true)(identifier)}/>))}
 			</svg>
-			{hover && (
-				<span style={{position: "absolute", left: coordinatesToPixels(PLATFORM_SETS[hover].coordinates).x, top: coordinatesToPixels(PLATFORM_SETS[hover].coordinates).y + 8, transform: "translate(-50%, 0)"}}>
-					<PlatformSetPreview platformSet={PLATFORM_SETS[hover]} select={select}/>
+			{psHover && (
+				<span style={{position: "absolute", left: coordinatesToPixels(PLATFORM_SETS[psHover].coordinates).x, top: coordinatesToPixels(PLATFORM_SETS[psHover].coordinates).y + 8, transform: "translate(-50%, 0)"}}>
+					<PlatformSetPreview platformSet={PLATFORM_SETS[psHover]} select={select}/>
 				</span>
 			)}
 			<span style={{"flex": "0 0 auto", "display": "flex", "flexDirection": "column", margin: "0px 80px 0px 25px"}}>
@@ -95,9 +120,9 @@ function SubwayMap({}){
 					<input type="checkbox" checked={scale} onClick={() => {updateSearchParams(setSearchParams, "scale", !scale)}} />
 					<br/>
 					<label style={{"margin-right": "8px"}}>Track Highlight</label>
-					<select>
-						{[{attribute: null, name: "None"}, ...Object.values(TRACK_ATTRIBUTES)].map(({attribute: att, name}) => (
-							<option selected={att === attribute} onClick={() => {updateSearchParams(setSearchParams, "attribute", att)}}>{name}</option>
+					<select onChange={(event) => {updateSearchParams(setSearchParams, "attribute", TRACK_ATTRIBUTES_NAME_MAP?.[event.target.value]?.attribute)}}>
+						{[{attribute: null, name: "None", visible: true}, ...Object.values(TRACK_ATTRIBUTES)].filter(({visible}) => visible).map(({attribute: att, name}) => (
+							<option selected={att === attribute}>{name}</option>
 						))}
 					</select>
 					<br/>
@@ -109,9 +134,11 @@ function SubwayMap({}){
 					</span>
 				)}
 			</span>
-			{platformSet && (
+			{focusValue && (
 				<span style={{"flex": "4 1 auto"}}>
-					<Station station={STATIONS[PLATFORM_SETS[platformSet].stationKey]} select={select}/>
+					{focusType === "ps" && <StationFocus station={STATIONS[PLATFORM_SETS[focusValue].stationKey]} select={select}/>}
+					{focusType === "service" && <ServiceFocus service={SERVICES[focusValue]} selectedPattern={pattern} setHover={setPatternHover} setSelect={(pat) => updateSearchParams(setSearchParams, "pattern", pat)}/>}
+					{focusType === "line" && true}
 				</span>
 			)}
 		</span>
@@ -119,6 +146,8 @@ function SubwayMap({}){
 }
 
 function TrackSegmentSvg({id, d, attributes, highlight}){
+	console.log(attributes);
+	console.log(highlight);
     const stroke = highlight ? highlight.colors[attributes[highlight.attribute]] : "#9c9c9c";
     if(stroke === undefined){
         throw new Error(`Track segment ${id} has no attribute ${highlight.attribute} or highlight has no value ${attributes[highlight.attribute]}`);
@@ -132,7 +161,7 @@ function TrackSegmentSvg({id, d, attributes, highlight}){
             title={id}
             fill="none"
             stroke={stroke}
-            //className="hoverable"
+            //className="psHoverable"
             strokeLinecap="round"
             strokeLinejoin="round"
             strokeMiterlimit="10"
@@ -145,12 +174,12 @@ function TrackSegmentSvg({id, d, attributes, highlight}){
 };
 
 //TODO could change highlight from string to bool
-function PlatformSetDot({platformSet, scale, setHover, setHighlight}){
+function PlatformSetDot({platformSet, scale, setPsHover, setFocus}){
 	const {x, y} = coordinatesToPixels(platformSet.coordinates);
 	const baseSize = 1.75;
 	const size = scale ? Math.sqrt(STATIONS[platformSet.stationKey].boardings / MIN_BOARDINGS) * baseSize : baseSize;
 	return (
-		<ellipse onClick={setHighlight} onMouseEnter={() => {setHover(true)}} onMouseLeave={() => {setHover(false)}} style={{fill: "#000000", stroke: "stroke: rgb(0, 0, 0)"}} cx={x} cy={y} rx={size} ry={size} transform="matrix(1, 0, 0, 1, 0, -7.105427357601002e-15)"/>
+		<ellipse onClick={setFocus} onMouseEnter={() => {setPsHover(true)}} onMouseLeave={() => {setPsHover(false)}} style={{fill: "#000000", stroke: "stroke: rgb(0, 0, 0)"}} cx={x} cy={y} rx={size} ry={size} transform="matrix(1, 0, 0, 1, 0, -7.105427357601002e-15)"/>
 	)
 }
 
@@ -166,7 +195,7 @@ function Legend({data, setHighlightValue}){
 					</tr>
 				</thead>
 				<tbody>
-					{Object.entries(colors).map(([option, color]) => (
+					{Object.entries(colors).filter(([option, _]) => option !== "null").map(([option, color]) => (
 						<tr onMouseEnter={() => {setHighlightValue(option)}} onMouseLeave={() => {setHighlightValue(null)}}>
 							<td>{option}<span style={{display: "inline-block", width: "12px"}}/></td>
 							<td>
@@ -182,7 +211,20 @@ function Legend({data, setHighlightValue}){
 	)
 }
 
-function Station({station, select}){
+function ServiceFocus({service, selectedPattern, setHover, setSelect}){
+	// TODO highlight selected pattern description
+	return (
+		<>
+			{service.map(({name, serviceDescription, route}, index) => (
+				<div onMouseEnter={() => {setHover(index)}} onMouseLeave={() => {setHover(null)}} onClick={() => {setSelect(selectedPattern === index ? null : index)}}>
+					{name} {serviceDescription}
+				</div>
+			))}
+		</>
+	);
+}
+
+function StationFocus({station, select}){
 	const {name, platformSets, boardings, odt, rank} = station;
 	const ordinal = num => {
 		if(num % 10 === 1 && num % 100 !== 11){
@@ -420,11 +462,12 @@ function showTime(serviceTime, select){
 }
 
 // NOT a react component, an object with two react components
-function TrackAttribute(attribute, name, options){
+function TrackAttribute(attribute, name, visible, options){
 	this.attribute = attribute;
 	this.name = name;
+	this.visible = visible;
 	// TODO absolutely need to replace this as it's confusing
-	const highlightColors = ["#0039a6", "#ff6319", "#6cbe45", "#a7a9ac", "#996633", "#fccc0a", "#ee352e", "#00933c", "#b933ad", "#00add00", "#808183"];
+	const highlightColors = ["#a7a9ac", "#0039a6", "#ff6319", "#6cbe45", "#996633", "#fccc0a", "#ee352e", "#00933c", "#b933ad", "#00add00", "#808183"];
 	this.colors = options.reduce((acc, option, index) => (acc[option] = highlightColors[typeof option === "number" ? option : index], acc), {});
 	// this.Selector = () => (<><span onClick={() => {updateSearchParams(setSearchParams, "highlight", this.name)}}>{this.name}</span><br/></>);
 	// this.OptionsWindow = () => (<ul>{this.options.map(opt => (<li>{opt}</li>))}</ul>)
@@ -432,7 +475,7 @@ function TrackAttribute(attribute, name, options){
 
 function updateSearchParams(setSearchParams, key, value){
 	setSearchParams((prev) => {
-		if(value === null || value === false){
+		if(value === null || value === undefined || value === false){
 			prev.delete(key);
 		} else {
 			prev.set(key, value);
