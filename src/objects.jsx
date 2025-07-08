@@ -23,6 +23,7 @@ function Track(line, type, direction, stops){
 	}
 	this.stops = stops;
 	this.service = {}; // Map from service to servicetime
+	this.compassDirection = null;
 }
 
 function Platform(type, accessible, service){
@@ -36,7 +37,7 @@ function Platform(type, accessible, service){
 }
 
 function PlatformSet(name, type, opened, layout, coordinates){
-	this.category = "PlatformSet";
+	this.category = "PlatformSet"; // TODO is this necessary?
 	this.name = name;
 	this.type = type;
 	// if(!(opened instanceof Date)){ // TODO ???
@@ -51,11 +52,6 @@ function PlatformSet(name, type, opened, layout, coordinates){
 	this.stationKey = null;
 }
 
-function Line(name, trackSegments){
-	this.name = name;
-	this.trackSegments = trackSegments; 
-}
-
 function Station(name, platformSets, boardings, odt){
 	this.name = name;
 	this.platformSets = platformSets;
@@ -64,32 +60,12 @@ function Station(name, platformSets, boardings, odt){
 	this.rank = null;
 }
 
-function TrackSegment(id, line, platformSets, division, type, signaling, obf, opened, used_tracks, unused_tracks, start, end, d){
-	this.id = id;
-	this.line = line;
+function ServiceSegment(name, platformSets, nextDirection, start, end){
+	this.name = name;
 	this.platformSets = platformSets;
-	this.division = division;
-	this.type = type;
-	this.signaling = signaling;
-	this.obf = obf;
-	this.opened = opened;
-	this.used_tracks = used_tracks;
-	this.unused_tracks = unused_tracks;
-	this.total_tracks = used_tracks + unused_tracks;
+	this.nextDirection = nextDirection;
 	this.start = start;
 	this.end = end;
-	this.d = d;
-}
-
-// TODO need to figure this out
-function Junction(line1, line2, type, line1tracks, line2tracks){
-	this.category = "Junction";
-	// tracks = "ALL" or TrackType
-	this.line1 = line1;
-	this.line2 = line2;
-	this.type = type;
-	this.line1tracks = line1tracks;
-	this.line2tracks = line2tracks;
 }
 
 function ServiceTime(earlyMorning, rushHour, midday, evening, lateNights, weekends){
@@ -113,15 +89,9 @@ function ServiceTimeStops(nextStopService, lastStopService){
 	this.serviceTime = null;
 }
 
-// function ServiceServiceTimes(serviceTimeStops){
-// 	this.serviceTimeStops = serviceTimeStops;
-// 	this.serviceTime = accumulateServiceTime(serviceTimeStops.map(sts => sts.serviceTime));
-// }
-
 const accumulateServiceTime = (patterns) => patterns.reduce((base, next) => (next === null ? base : new ServiceTime(Math.max(base.earlyMorning, next.earlyMorning), Math.max(base.rushHour, next.rushHour), Math.max(base.midday, next.midday), Math.max(base.evening, next.evening), Math.max(base.lateNights, next.lateNights), Math.max(base.weekends, next.weekends))), new ServiceTime(ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO));
 
-function ServicePattern(name, serviceDescription, serviceDirection, serviceTime, route, skips){
-	this.name = name;
+function ServicePattern(serviceDescription, serviceDirection, serviceTime, route, skips){
 	this.serviceDescription = serviceDescription;
 	this.serviceDirection = serviceDirection;
 	this.serviceTime = serviceTime;
@@ -130,24 +100,14 @@ function ServicePattern(name, serviceDescription, serviceDirection, serviceTime,
 	this.compiledRoute = null;
 }
 
-// function ServiceSlice(line, from, to, type, skips, internalDirection=InternalDirection.BOTH){
-// 	this.line = line;
-// 	this.from = from; // TODO assert member?
-// 	this.to = to;
-// 	this.type = type;
-// 	this.skips = skips;
-// 	this.internalDirection = internalDirection; // Even for patterns that run only in one direction this is only needed for slices that pass through <= 1 stations and their counterparts if any
-// }
+function ServiceInformation(service, subtitle, servicePatterns){
+	this.service = service;
+	this.subtitle = subtitle;
+	this.servicePatterns = servicePatterns;
+}
 
-// function ServiceSlice(trackSegments, type, skips, internalDirection=InternalDirection.BOTH){
-// 	this.trackSegments = trackSegments;
-// 	this.type = type;
-// 	this.skips = skips;
-// 	this.internalDirection = internalDirection; // Even for patterns that run only in one direction this is only needed for slices that pass through <= 1 stations and their counterparts if any
-// }
-
-function SegmentServiceType(trackSegment, type){
-	this.trackSegment = trackSegment;
+function SegmentServiceType(serviceSegment, type){
+	this.serviceSegment = serviceSegment;
 	this.type = type;
 }
 
@@ -170,15 +130,14 @@ export {
 	Track,
 	Platform,
 	PlatformSet,
-	Line,
 	Station,
-	TrackSegment,
-	Junction,
+	ServiceSegment,
 	ServiceTime,
 	serviceTimeEqual,
 	ServiceTimeStops,
 	accumulateServiceTime,
 	ServicePattern,
+	ServiceInformation,
 	SegmentServiceType,
 	ServiceStop,
 	Miscellaneous,

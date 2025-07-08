@@ -1,8 +1,9 @@
-import React, {useState} from "react";
+import React, {useState, useEffect} from "react";
 import {BrowserRouter, Route, Routes, Link, useSearchParams, useParams} from "react-router-dom";
-import {Background} from "./background.jsx";
-import {TRACK_SEGMENTS, PLATFORM_SETS, SERVICES, STATIONS, MIN_BOARDINGS} from "./data.jsx";
+import {DateTime, Interval} from "luxon";
+import {PLATFORM_SETS, SERVICES, STATIONS, MIN_BOARDINGS} from "./data.jsx";
 import {BULLETS} from "./bullets.jsx";
+import {TRACK_SEGMENTS} from "./tsdata.jsx"
 import {
 	ServiceType,
 	LineName,
@@ -19,7 +20,16 @@ import {
 } from "./enums.jsx";
 import {serviceTimeEqual} from "./objects.jsx";
 
-// Final TODO: separation between floors, try track description on side
+// Misc TODO 
+// circle/highlight/border station dots
+// hardcoded line name positions
+// line focus?
+// Better representation of scaled stations
+// Bullet ordering
+// Better color scheme
+// Fixed text and arrow representation of terminal stations
+// Multiple values for track attributes (QBL/astoria overlap)
+// Add ability to generate larger image and scale down
 
 function Subway({}){
 	return (
@@ -32,28 +42,32 @@ function Subway({}){
 	);
 }
 
-const selfPointingTrackAttributeObject = (attribute, name, visible, options) => {return {[attribute]: new TrackAttribute(attribute, name, visible, options)}};
+const selfPointingTrackAttributeObject = (attribute, name, visible, options, discrete) => {return {[attribute]: new TrackAttribute(attribute, name, visible, options, discrete)}};
 const trackAttributesBase = [
-	new TrackAttribute("total_tracks", "Total Tracks", true, [1, 2, 3, 4, 6, 8]),
-	new TrackAttribute("used_tracks", "Used Tracks", true, [0, 1, 2, 3, 4, 6, 8]),
-	new TrackAttribute("unused_tracks", "Unused Tracks", true, [0, 1, 2]),
-	//new TrackAttribute("Date Opened", ["TBD"]), true, TODO
-	new TrackAttribute("obf", "Originally Built For", true, Object.values(BuiltFor)),
-	new TrackAttribute("type", "Track Type", true, Object.values(PlatformSetType)),
-	new TrackAttribute("division", "Division", true, Object.values(Division)),
-	new TrackAttribute("signaling", "Signaling Type", true, Object.values(SignalingType)),
-	new TrackAttribute("service", "Service", false, [null, ...Object.values(TrackType)]), // TODO hide from menu and implement service highlighting
+	new TrackAttribute("total_tracks", "Total Tracks", true, [1, 2, 3, 4, 6, 7, 8], true),
+	new TrackAttribute("used_tracks", "Used Tracks", true, [0, 1, 2, 3, 4, 6, 7, 8], true),
+	new TrackAttribute("unused_tracks", "Unused Tracks", true, [0, 1, 2], true),
+	new TrackAttribute("opened", "Date Opened", true, [ // TODO encode this data somewhere else? Could use single dates to avoid duplication
+		["Before 1900", Interval.fromDateTimes(DateTime.fromObject({year: 1, month: 1, day: 1}), DateTime.fromObject({year: 1900, month: 1, day: 1}))],
+		["1900 - 1909", Interval.fromDateTimes(DateTime.fromObject({year: 1900, month: 1, day: 1}), DateTime.fromObject({year: 1910, month: 1, day: 1}))],
+		["1910 - 1919", Interval.fromDateTimes(DateTime.fromObject({year: 1910, month: 1, day: 1}), DateTime.fromObject({year: 1920, month: 1, day: 1}))],
+		["1920 - 1929", Interval.fromDateTimes(DateTime.fromObject({year: 1920, month: 1, day: 1}), DateTime.fromObject({year: 1930, month: 1, day: 1}))],
+		["1930 - 1939", Interval.fromDateTimes(DateTime.fromObject({year: 1930, month: 1, day: 1}), DateTime.fromObject({year: 1940, month: 1, day: 1}))],
+		["1940 - 1949", Interval.fromDateTimes(DateTime.fromObject({year: 1940, month: 1, day: 1}), DateTime.fromObject({year: 1950, month: 1, day: 1}))],
+		["1950 - 1959", Interval.fromDateTimes(DateTime.fromObject({year: 1950, month: 1, day: 1}), DateTime.fromObject({year: 1960, month: 1, day: 1}))],
+		["1960 - 1999", Interval.fromDateTimes(DateTime.fromObject({year: 1960, month: 1, day: 1}), DateTime.fromObject({year: 2000, month: 1, day: 1}))],
+		["2000 - present", Interval.fromDateTimes(DateTime.fromObject({year: 2000, month: 1, day: 1}), DateTime.fromObject({year: 3000, month: 1, day: 1}))],
+	], false), // Start: >=, end: <
+	new TrackAttribute("obf", "Originally Built For", true, Object.values(BuiltFor), true),
+	new TrackAttribute("type", "Track Type", true, Object.values(PlatformSetType), true),
+	new TrackAttribute("division", "Division", true, Object.values(Division), true),
+	new TrackAttribute("signaling", "Signaling Type", true, Object.values(SignalingType), true),
+	new TrackAttribute("service", "Service", false, [null, ...Object.values(TrackType)], true),
 ];
 const TRACK_ATTRIBUTES = Object.fromEntries(trackAttributesBase.map(attr => [attr.attribute, attr]));
 const TRACK_ATTRIBUTES_NAME_MAP = Object.fromEntries(trackAttributesBase.map(attr => [attr.name, attr]));
 
-const NORTH = 40.9268;
-const SOUTH = 40.5399;
-const WEST = -74.1026;
-const EAST = -73.6930;
-const WIDTH = 648;
-const HEIGHT = 792;
-const coordinatesToPixels = ({lat, lon}) => {return {x: (lon - WEST) * (WIDTH / (EAST - WEST)), y: -(lat - NORTH) * (HEIGHT / (NORTH - SOUTH))}};
+const BACKGROUND_SRC = require("./shoreline.png");
 
 function SubwayMap({}){
 	const [searchParams, setSearchParams] = useSearchParams();
@@ -62,10 +76,25 @@ function SubwayMap({}){
 	const attribute = searchParams.get("attribute");
 	const select = searchParams.get("select") === "true" || false;
 	const scale = searchParams.get("scale") === "true" || false;
-	const pattern = searchParams.get("pattern");
+	const service = searchParams.get("service") === null ? null : parseInt(searchParams.get("service"));
+	const pattern = searchParams.get("pattern") === null ? null : parseInt(searchParams.get("pattern"));
+	const [dimensions, setDimensions] = useState({});
 	const [psHover, setPsHover] = useState(null);
+	const [serviceHover, setServiceHover] = useState(null);
 	const [patternHover, setPatternHover] = useState(null);
+	const [lineHover, setLineHover] = useState(null);
 	const [highlightValue, setHighlightValue] = useState(null);
+	const [svgDimensions, setSvgDimensions] = useState({});
+	useEffect(() => {
+		const img = new Image();
+		img.onload = () => {
+			setSvgDimensions({y: img.naturalHeight, x: img.naturalWidth});
+		}
+		img.src = BACKGROUND_SRC;
+	}, []);
+	if(svgDimensions.x === undefined || svgDimensions.y === undefined){
+		return null;
+	}
 	const highlight = attribute || pattern || patternHover !== null ? {...TRACK_ATTRIBUTES[(pattern || patternHover !== null) ? "service" : attribute], highlightValue} : null;
 	const setFocus = (type, doubleclick=false) => {
 		return value => {
@@ -79,15 +108,28 @@ function SubwayMap({}){
 		}
 	}
 
+	const pat = patternHover === null ? pattern : patternHover;
+	const ser = serviceHover === null ? service : serviceHover;
+
 	const getAttributes = segment => {
 		let extraAttributes = {}
 		const {id, d, ...attributes} = segment;
-		let pat = patternHover === null ? pattern : patternHover;
 		if(pat !== null){
-			const segmentServiceType = SERVICES[focusValue][pat].route.find(({trackSegment}) => trackSegment === id);
+			const segmentServiceType = SERVICES[focusValue][ser].servicePatterns[pat].route.find(({serviceSegment}) => serviceSegment === attributes.service_segment);
 			extraAttributes = {service: segmentServiceType ? segmentServiceType.type : null};
 		}
 		return {...attributes, ...extraAttributes};
+	}
+
+	const stops = {};
+	if(pat !== null){
+		SERVICES[focusValue][ser].servicePatterns[pat].compiledRoute.reduce((obj, serviceStop) => {
+			const {stop, trackNext, trackPrevious} = serviceStop;
+			const stopsNext = trackNext?.stops;
+			const stopsPrevious = trackPrevious?.stops;
+			obj[stop] = [stopsNext, stopsPrevious];
+			return obj;
+		}, stops)
 	}
 
 	return (
@@ -97,18 +139,26 @@ function SubwayMap({}){
 				xmlnsXlink="http://www.w3.org/1999/xlink"
 				xmlSpace="preserve"
 				id="svg2"
-				width={WIDTH}
-				height={HEIGHT}
+				height={svgDimensions.y}
+				width={svgDimensions.x}
 				version="1.1"
 				style={{"flex": "0 0 auto", "z-index": "0"}}
 			>
-				<Background />														
-				{Object.values(TRACK_SEGMENTS).map(segment => <TrackSegmentSvg id={segment.id} d={segment.d} attributes={getAttributes(segment)} highlight={highlight}/>)}
-				{Object.entries(PLATFORM_SETS).toSorted((a, b) => b.boardings - a.boardings).map(([identifier, ps]) => (<PlatformSetDot platformSet={ps} scale={scale} setPsHover={(tr) => setPsHover(tr ? identifier : null)} setFocus={() => setFocus("ps", true)(identifier)}/>))}
+				<image x="0" y="0" width="100%" xlinkHref={BACKGROUND_SRC}></image>
+
+				{Object.values(TRACK_SEGMENTS).filter(segment => segment.visible).map(segment => <TrackSegmentSvg id={segment.id} d={segment.d} attributes={getAttributes(segment)} highlight={highlight} hover={segment.lines.includes(lineHover)} setLineHover={(tr) => setLineHover(tr ? segment.lines[0] : null)}/>)}
+				{Object.entries(PLATFORM_SETS).toSorted((a, b) => b.boardings - a.boardings).map(([identifier, ps]) => (<PlatformSetDot platformSet={ps} scale={scale} stops={stops} setPsHover={(tr) => setPsHover(tr ? identifier : null)} setFocus={() => setFocus("ps", true)(identifier)}/>))}
 			</svg>
 			{psHover && (
-				<span style={{position: "absolute", left: coordinatesToPixels(PLATFORM_SETS[psHover].coordinates).x, top: coordinatesToPixels(PLATFORM_SETS[psHover].coordinates).y + 8, transform: "translate(-50%, 0)"}}>
+				<span style={{position: "absolute", left: PLATFORM_SETS[psHover].coordinates.x, top: PLATFORM_SETS[psHover].coordinates.y + 8, transform: "translate(-50%, 0)"}}>
 					<PlatformSetPreview platformSet={PLATFORM_SETS[psHover]} select={select}/>
+				</span>
+			)}
+			{/* TODO could do mouse position, also could do hardcoded location for each line*/}
+			{lineHover && (
+				//<span style={{position: "absolute", left: mousePosition.x, top: mousePosition.y + 8, transform: "translate(-50%, 0)"}}>
+				<span style={{position: "absolute", left: 0, top: 0}}>
+					<LinePreview line={lineHover} select={select}/>
 				</span>
 			)}
 			<span style={{"flex": "0 0 auto", "display": "flex", "flexDirection": "column", margin: "0px 80px 0px 25px"}}>
@@ -126,6 +176,44 @@ function SubwayMap({}){
 						))}
 					</select>
 					<br/>
+					<label style={{"margin-right": "8px"}}>Station</label>
+					<select onChange={(event) => {
+						if(event.target.value === "None"){
+							updateSearchParams(setSearchParams, "ftype", null);
+							updateSearchParams(setSearchParams, "fvalue", null);
+						} else {
+							updateSearchParams(setSearchParams, "ftype", "ps");
+							updateSearchParams(setSearchParams, "fvalue", event.target.value);
+						}
+						
+					}}>
+												{/*TODO change to stations?*/}
+						{["None", ...Object.keys(PLATFORM_SETS).toSorted()].map((name) => (
+							// TODO this doesn't work, mouseenter/leave are not supported by option, need a custom component 
+							<option onMouseEnter={() => {setPsHover(null)}} onMouseLeave={() => {setPsHover(null)}} selected={(focusType === "ps" && focusValue === name) || (focusType !== "ps" && name === null)}>{name}</option>
+						))}
+					</select>
+					<br/>
+					<label style={{"margin-right": "8px"}}>Service</label>
+					<select onChange={(event) => {
+						if(event.target.value === "None"){
+							updateSearchParams(setSearchParams, "ftype", null);
+							updateSearchParams(setSearchParams, "fvalue", null);
+							updateSearchParams(setSearchParams, "service", null);
+							updateSearchParams(setSearchParams, "pattern", null);
+						} else {
+							updateSearchParams(setSearchParams, "ftype", "service");
+							updateSearchParams(setSearchParams, "fvalue", event.target.value);
+							updateSearchParams(setSearchParams, "service", null);
+							updateSearchParams(setSearchParams, "pattern", null);
+						}
+						
+					}}>
+						{["None", ...Object.keys(SERVICES)].map((name) => (
+							<option selected={(focusType === "service" && focusValue === name) || (focusType !== "service" && name === null)}>{name}</option>
+						))}
+					</select>
+					<br/>
 					<br/>
 				</span>
 				{highlight && (
@@ -137,7 +225,7 @@ function SubwayMap({}){
 			{focusValue && (
 				<span style={{"flex": "4 1 auto"}}>
 					{focusType === "ps" && <StationFocus station={STATIONS[PLATFORM_SETS[focusValue].stationKey]} select={select}/>}
-					{focusType === "service" && <ServiceFocus service={SERVICES[focusValue]} selectedPattern={pattern} setHover={setPatternHover} setSelect={(pat) => updateSearchParams(setSearchParams, "pattern", pat)}/>}
+					{focusType === "service" && <ServiceFocus servicesInformation={SERVICES[focusValue]} selected={{service, pattern}} setHover={(service, pattern) => {setServiceHover(service);setPatternHover(pattern);}} setSelect={(ser, pat) => {updateSearchParams(setSearchParams, "service", ser);updateSearchParams(setSearchParams, "pattern", pat);}}/>}
 					{focusType === "line" && true}
 				</span>
 			)}
@@ -145,41 +233,52 @@ function SubwayMap({}){
 	);
 }
 
-function TrackSegmentSvg({id, d, attributes, highlight}){
-	console.log(attributes);
-	console.log(highlight);
-    const stroke = highlight ? highlight.colors[attributes[highlight.attribute]] : "#9c9c9c";
+function TrackSegmentSvg({id, d, attributes, highlight, hover, setLineHover}){
+    const {stroke, opacity} = highlight ? highlight.getColor(attributes[highlight.attribute]) : {stroke: "#9c9c9c", opacity: "1"};
     if(stroke === undefined){
         throw new Error(`Track segment ${id} has no attribute ${highlight.attribute} or highlight has no value ${attributes[highlight.attribute]}`);
     }
-    const shadowSize = "0.04px";
+    const shadowSize = "0.5px";
     const shadowColor = "#555555";
-    const style = (highlight && (highlight.highlightValue === `${attributes[highlight.attribute]}`)) ? {filter: `drop-shadow(-${shadowSize} -${shadowSize} ${shadowColor}) drop-shadow(${shadowSize} -${shadowSize} ${shadowColor}) drop-shadow(${shadowSize} ${shadowSize} ${shadowColor}) drop-shadow(-${shadowSize} ${shadowSize} ${shadowColor})`} : {}
+    // TODO bring to front if using shadow? Overall I'm a bit dissatisfied with this
+    const useShadow =  hover || (highlight && (attributes[highlight.attribute] !== null && highlight.getColor(highlight.highlightValue).stroke === highlight.getColor(attributes[highlight.attribute]).stroke))
+    //const style = useShadow ? {filter: `drop-shadow(-${shadowSize} -${shadowSize} ${shadowColor}) drop-shadow(${shadowSize} -${shadowSize} ${shadowColor}) drop-shadow(${shadowSize} ${shadowSize} ${shadowColor}) drop-shadow(-${shadowSize} ${shadowSize} ${shadowColor})`} : {}
     return (
         <path
             id={`path${id}`}
             title={id}
             fill="none"
             stroke={stroke}
-            //className="psHoverable"
+            strokeOpacity={opacity}
             strokeLinecap="round"
             strokeLinejoin="round"
             strokeMiterlimit="10"
-            strokeWidth="3.5"
-            style={style}
+            strokeWidth={useShadow ? "5.5" : "2.5"}
+            //style={style}
             d={d}
             clipPath="url(#SVGID_548_)"
+            onMouseEnter={() => {setLineHover(true)}}
+            onMouseLeave={() => {setLineHover(false)}}
         ></path>
     )
 };
 
 //TODO could change highlight from string to bool
-function PlatformSetDot({platformSet, scale, setPsHover, setFocus}){
-	const {x, y} = coordinatesToPixels(platformSet.coordinates);
-	const baseSize = 1.75;
-	const size = scale ? Math.sqrt(STATIONS[platformSet.stationKey].boardings / MIN_BOARDINGS) * baseSize : baseSize;
+function PlatformSetDot({platformSet, scale, stops, setPsHover, setFocus}){
+	const {name, coordinates: {x, y}} = platformSet;
+	const baseSize = 3;
+	const scaleBaseSize = 1.5;
+	const size = scale ? Math.sqrt(STATIONS[platformSet.stationKey].boardings / MIN_BOARDINGS) * scaleBaseSize : baseSize;
+	let fill = "#000000";
+	if(stops[name]){ // TODO directional only stop
+		if(stops[name][0] || stops[name][1]){
+			fill = "#fffb00";
+		} else {
+			fill = "#ff0000";
+		}
+	}
 	return (
-		<ellipse onClick={setFocus} onMouseEnter={() => {setPsHover(true)}} onMouseLeave={() => {setPsHover(false)}} style={{fill: "#000000", stroke: "stroke: rgb(0, 0, 0)"}} cx={x} cy={y} rx={size} ry={size} transform="matrix(1, 0, 0, 1, 0, -7.105427357601002e-15)"/>
+		<ellipse onClick={setFocus} onMouseEnter={() => {setPsHover(true)}} onMouseLeave={() => {setPsHover(false)}} style={{fill, stroke: "stroke: rgb(0, 0, 0)"}} cx={x} cy={y} rx={size} ry={size} transform="matrix(1, 0, 0, 1, 0, -7.105427357601002e-15)"/>
 	)
 }
 
@@ -211,14 +310,25 @@ function Legend({data, setHighlightValue}){
 	)
 }
 
-function ServiceFocus({service, selectedPattern, setHover, setSelect}){
-	// TODO highlight selected pattern description
+function ServiceFocus({servicesInformation, selected, setHover, setSelect}){
 	return (
 		<>
-			{service.map(({name, serviceDescription, route}, index) => (
-				<div onMouseEnter={() => {setHover(index)}} onMouseLeave={() => {setHover(null)}} onClick={() => {setSelect(selectedPattern === index ? null : index)}}>
-					{name} {serviceDescription}
-				</div>
+			{servicesInformation.map(({service, subtitle, servicePatterns}, serviceIndex) => (
+				<>
+					{BULLETS[service]()}{" "}{subtitle}<br/>
+					<span style={{"text-indent": "50px"}}>
+						{servicePatterns.map(({serviceDescription}, patternIndex) => {
+							const isSelected = selected.service === serviceIndex && selected.pattern === patternIndex;
+							const child = (
+								<div onMouseEnter={() => {setHover(serviceIndex, patternIndex)}} onMouseLeave={() => {setHover(null, null)}} onClick={() => {isSelected ? setSelect(null, null) : setSelect(serviceIndex, patternIndex)}}>
+									{""}{serviceDescription}
+								</div>
+							)
+							return isSelected ? (<strong>{child}</strong>) : child;
+						})}
+					</span>
+					<br/>
+				</>
 			))}
 		</>
 	);
@@ -269,20 +379,7 @@ function StationFocus({station, select}){
 // TODO change name to platformset?
 function PlatformSetPreview({platformSet, select}){
 	const {name, type, odt, layout, platformName} = platformSet;
-	const bullets = new Set();
-	for(const floor of layout){
-		for(const element of floor){
-			if(element.category !== "Track" || !element.stops){
-				continue;
-			}
-			for(const [service, {serviceTime}] of Object.entries(element.service)){
-				// TODO order, MAKE THIS A SEPARATE FUNCTION NOTE: late nights omitted on purpose
-				if(select || [serviceTime.earlyMorning, serviceTime.rushHour, serviceTime.midday, serviceTime.evening, serviceTime.weekends].some(t => t === ServiceType.YES)){
-					bullets.add(service);
-				}
-			}
-		}
-	}
+	const bullets = getBullets([platformSet], select);
 	return (
 		<div style={{"background-color": "#000000", "color": "#FFFFFF", "font-family": "Helvetica", "font-weight": "bold", "border-top": "10px solid black", "box-shadow": "inset 0 2px white", "padding": "2px 10px"}}>
 			{name}<br/>
@@ -291,12 +388,45 @@ function PlatformSetPreview({platformSet, select}){
 	);
 }
 
+function LinePreview({line, select}){
+	// TODO this is part of the "station overhaul"
+	const platformSets = Object.values(PLATFORM_SETS).filter(ps => ps.layout.flat().map(el => el.line).includes(line));
+	const bullets = getBullets(platformSets, select);
+	return (
+		<div style={{"background-color": "#000000", "color": "#FFFFFF", "font-family": "Helvetica", "font-weight": "bold", "border-top": "10px solid black", "box-shadow": "inset 0 2px white", "padding": "2px 10px"}}>
+			{line}<br/>
+			{Array.from(bullets).toSorted().map(bullet => (BULLETS[bullet]()))}
+		</div>
+	)
+}
+
+function getBullets(platformSets, select){
+	const bullets = new Set();
+	for(const platformSet of platformSets){
+		const {layout} = platformSet;
+		for(const floor of layout){
+			for(const element of floor){
+				if(element.category !== "Track" || !element.stops){
+					continue;
+				}
+				for(const [service, {serviceTime}] of Object.entries(element.service)){
+					// TODO order, MAKE THIS A SEPARATE FUNCTION NOTE: late nights omitted on purpose
+					if(select || [serviceTime.earlyMorning, serviceTime.rushHour, serviceTime.midday, serviceTime.evening, serviceTime.weekends].some(t => t === ServiceType.YES)){
+						bullets.add(service);
+					}
+				}
+			}
+		}
+	}
+	// TODO order bullets and return list?
+	return bullets;
+}
+
 function PlatformSet({platformSet, select}){
 	const {name, type, odt, opened, layout, platformName, lines} = platformSet;
 	// Ideas: render background as dark or brown color to represent the ground, render track description (ie "westbound local") to the side, by default show services lined up then expand
 	return (
 		<>
-			{/* TODO add platformName */}
 			<div style={{"margin-bottom": "4px"}}> <span style={{"font-weight": "bold"}}>{lines.join(", ")} Platforms</span> ({type}, Opened {opened.toLocaleString()})</div>
 			{layout.map((floor, index) => (
 				<>
@@ -324,16 +454,15 @@ function PlatformSet({platformSet, select}){
 }
 
 function Track({track, select}){
-	const {type, direction, stops, service} = track;
+	const {type, direction, compassDirection, stops, service} = track;
 	let hasService = false;
 	return (
 		<>
-			<div>{direction === InternalDirection.NEXT ? "\u2190 West" : "\u2192 East"}bound{type !== TrackType.NORMAL && ` ${type}`}</div>
+			<div>{direction === InternalDirection.NEXT ? "\u2190" : "\u2192"}{compassDirection}bound {type}</div>
 			<div style={{height: "24px", margin: "5px 0px", background: "linear-gradient(to bottom, rgb(255 255 255 / 0%), rgb(255 0 153 / 0%) 4px, #E9E9E9 4px, #E9E9E9 8px, rgb(255 255 255 / 0%) 8px, rgb(255 0 153 / 0%) 16px, #E9E9E9 16px, #E9E9E9 20px, rgb(255 255 255 / 0%) 20px, rgb(255 255 255 / 0%) 24px), repeating-linear-gradient(to right, #FFFFFF, #FFFFFF 12px, #c19a6b 12px, #c19a6b 20px)"}}/>
 			{Object.entries(service).map(([name, serviceTimeStops], index) => {
 				const {serviceTime} = serviceTimeStops;
 				const StopDescription = () => stops ? <NextLastStops serviceTimeStops={serviceTimeStops} select={select}/> : " does not stop here"
-				// TODO multiple spaces?
 				if(select){
 					hasService = true;
 					return <div style={{margin: "5px 0px"}}>{BULLETS[name]()}{` ${serviceTimeString(serviceTime, ServiceType.YES)} ${serviceTimeString(serviceTime, ServiceType.SELECT)}`} <StopDescription/></div>;
@@ -390,44 +519,6 @@ function Platform({platform}){
 	);
 }
 
-function Service({service, select}){
-	// 1. name, 2. service time description, 3. stations
-	return (
-		<table>
-			<tbody>
-				{service.filter(pattern => showTime(pattern.serviceTime, select)).map(pattern => (
-					<tr>
-						<td>
-							{pattern.name}
-						</td>
-						<td>
-							{pattern.serviceDescription}
-						</td>
-						{pattern.compiledRoute.map(serviceStop => (
-							<td>
-								{(() => {
-									const {stop, trackNext, trackPrevious} = serviceStop;
-									const stopsNext = trackNext?.stops;
-									const stopsPrevious = trackPrevious?.stops;
-									if(!stopsNext && !stopsPrevious){
-										return (<i>{stop}</i>);
-									} else if(stopsNext && !stopsPrevious){
-										return `${stop}\u2191`;
-									} else if(!stopsNext && stopsPrevious){
-										return `${stop}\u2193`;
-									} else {
-										return stop;
-									}
-								})()}
-							</td>
-						))}
-					</tr>
-				))}
-			</tbody>
-		</table>
-	);
-}
-
 function serviceTimeString(serviceTime, level){
 	const select = level === ServiceType.SELECT;
 	if(serviceTime === null){
@@ -450,27 +541,44 @@ function serviceTimeString(serviceTime, level){
 	} else if(numberOfTimes > 3){
 		return `${select ? "Select trips a" : "A"}ll times except ${getHumanReadableList(([desc, el]) => el !== level, true)}`;
 	} else if(numberOfTimes > 0){
-		return `${select ? "Select " : ""}${getHumanReadableList(([desc, el]) => el === level, !select)}${select ? " trips" : ""}`; //TODO capitalize first letter?
+		return `${select ? "Select " : ""}${getHumanReadableList(([desc, el]) => el === level, !select)}${select ? " trips" : ""}`;
 	} else {
 		return "";
 	}
 }
 
-function showTime(serviceTime, select){
-	// TODO utilize
-	return select || [serviceTime.earlyMorning, serviceTime.rushHour, serviceTime.midday, serviceTime.evening, serviceTime.lateNights, serviceTime.weekends].some(t => t === ServiceType.YES);
-}
+// function showTime(serviceTime, select){
+// 	// TODO utilize
+// 	return select || [serviceTime.earlyMorning, serviceTime.rushHour, serviceTime.midday, serviceTime.evening, serviceTime.lateNights, serviceTime.weekends].some(t => t === ServiceType.YES);
+// }
 
-// NOT a react component, an object with two react components
-function TrackAttribute(attribute, name, visible, options){
+function TrackAttribute(attribute, name, visible, options, discrete){
 	this.attribute = attribute;
 	this.name = name;
 	this.visible = visible;
+	this.options = options;
 	// TODO absolutely need to replace this as it's confusing
 	const highlightColors = ["#a7a9ac", "#0039a6", "#ff6319", "#6cbe45", "#996633", "#fccc0a", "#ee352e", "#00933c", "#b933ad", "#00add00", "#808183"];
-	this.colors = options.reduce((acc, option, index) => (acc[option] = highlightColors[typeof option === "number" ? option : index], acc), {});
-	// this.Selector = () => (<><span onClick={() => {updateSearchParams(setSearchParams, "highlight", this.name)}}>{this.name}</span><br/></>);
-	// this.OptionsWindow = () => (<ul>{this.options.map(opt => (<li>{opt}</li>))}</ul>)
+	if(discrete){
+		this.colors = this.options.reduce((acc, option, index) => (acc[option] = highlightColors[typeof option === "number" ? option : index], acc), {});
+	} else {
+		this.colors = this.options.reduce((acc, [option, _], index) => (acc[option] = highlightColors[typeof option === "number" ? option : index], acc), {});
+	}
+	this.getColor = (value) => {
+		if(value === null){
+			return {stroke: "#9c9c9c", opacity: "1"};
+		} else if(discrete){
+			return {stroke: this.colors[value], opacity: "1"};
+		} else {
+			let index = 0;
+			for(const [option, interval] of this.options){
+				if(interval.contains(value) || option === value){
+					return {stroke: this.colors[option], opacity: "1"};
+				}
+				index += 1
+			}
+		}
+	}
 }
 
 function updateSearchParams(setSearchParams, key, value){

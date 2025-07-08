@@ -6,7 +6,7 @@
 	- **Track type**
 	- **Signaling type**
 	- **Originally built for**
-	- *Date opened*
+	- **Date opened**
 	- **Used tracks**
 	- **Unused tracks**
 	- **Total tracks**
@@ -19,13 +19,13 @@
 	- **Show platform layout**
 	- **Show service at each track**
 
-- *Service focus*
-	- *List of service patterns under a single service name*
-	- *Highlight track traveled on by a service pattern*
+- Service focus
+	- **List of service patterns under a single service name**
+	- **Highlight track traveled on by a service pattern**
 	- *List stations stopped and skipped by a service pattern*
 
-- *Line focus*
-	- *Highlight track belonging to line*
+- Line focus
+	- **Highlight track belonging to line**
 	- *List stations in line*
 
 - **Scale stations by boardings**

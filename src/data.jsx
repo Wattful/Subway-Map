@@ -1,12 +1,3 @@
-// WEST EDGE: -74.0508 EAST EDGE -73.7462 (684.433)
-// NORTH EDGE: 40.9126 SOUTH EDGE: 40.5578 (1038.043)
-// -(y - 40.9126)(2,925.713)
-// -(x - -74.0508)(2,246.989)
-//def convert(x, y):
-//  return ((-1 * (x + 74.0508) * 2246.989), (-1 * (y - 40.9126) * (2925.713)))
-
-//648x792 684.433x1038.05 1.154286667407984
-
 import React from "react";
 import {DateTime} from "luxon";
 import {
@@ -18,6 +9,7 @@ import {
 	PlatformService,
 	InternalDirection,
 	ServiceDirection,
+	CardinalDirection,
 	Division,
 	SignalingType,
 	JunctionType,
@@ -28,15 +20,14 @@ import {
 	Track,
 	Platform,
 	PlatformSet,
-	Line,
 	Station,
-	TrackSegment,
-	Junction,
+	ServiceSegment,
 	ServiceTime,
 	ServiceTimeStops,
 	TrackServiceTime,
 	accumulateServiceTime,
 	ServicePattern,
+	ServiceInformation,
 	SegmentServiceType,
 	ServiceStop,
 	Miscellaneous,
@@ -49,6 +40,15 @@ import {
 	MBullet,
 	RBullet,
 } from "./bullets.jsx";
+import {
+	TRACK_SEGMENTS,
+	PLATFORM_SET_COORDS,
+} from "./tsdata.jsx";
+
+// TODO cases not currently handled:
+// 1. Peak-direction/bidirectional service
+// 2. Single platform set with multiple lines
+// 3. Multiple dots/platform sets for a single station
 
 // Common four-track platform layouts
 const fourTrackExpressLayout = (line, accessibleNext, accessiblePrevious) => [[
@@ -83,7 +83,7 @@ const fourTrackLocalSeparatedByTypeLayout = (line, accessibleNext, accessiblePre
 ]];
 
 // Common two-track platform layouts
-const twoTrackIslandLayout = (line, accessible, tracktype=TrackType.NORMAL) => 
+const twoTrackIslandLayout = (line, accessible, tracktype=TrackType.LOCAL) => 
 [[
 	new Track(line, tracktype, InternalDirection.NEXT, true),
 	new Platform(PlatformType.ISLAND, accessible, PlatformService.BOTH),
@@ -91,7 +91,7 @@ const twoTrackIslandLayout = (line, accessible, tracktype=TrackType.NORMAL) =>
 ]];
 
 // TODO could consolidate more?
-const twoTrackSideLayout = (line, accessibleNext, accessiblePrevious, tracktype=TrackType.NORMAL) => 
+const twoTrackSideLayout = (line, accessibleNext, accessiblePrevious, tracktype=TrackType.LOCAL) => 
 [[
 	new Platform(PlatformType.SIDE, accessibleNext, PlatformService.DOWN),
 	new Track(line, tracktype, InternalDirection.NEXT, true),
@@ -102,52 +102,52 @@ const twoTrackSideLayout = (line, accessibleNext, accessiblePrevious, tracktype=
 // Less common two-track platform layouts
 const twoTrackSeparatedLayout = (line, accessibleNext, accessiblePrevious) => // TODO this has a few variations
 [[
-	new Track(line, TrackType.NORMAL, InternalDirection.NEXT, true),
+	new Track(line, TrackType.LOCAL, InternalDirection.NEXT, true),
 	new Platform(PlatformType.SIDE, accessibleNext, PlatformService.UP),
 
 ], [
-	new Track(line, TrackType.NORMAL, InternalDirection.PREVIOUS, true),
+	new Track(line, TrackType.LOCAL, InternalDirection.PREVIOUS, true),
 	new Platform(PlatformType.SIDE, accessiblePrevious, PlatformService.UP),
 ]];
 
+const coordsForID = (id) => PLATFORM_SET_COORDS[id].coords;
 
 const selfPointingPlatformSetObject = (name, disambiguator, type, opened, layout, position) => {return {[name + (disambiguator ? ` ${disambiguator}` : "")]: new PlatformSet(name, type, opened, layout, position)}};
 
+// TODO a general overhaul of how stations are stored
 const PLATFORM_SETS = {
-	...selfPointingPlatformSetObject("Jamaica-179th Street", null, PlatformSetType.UNDERGROUND, DateTime.fromObject({year: 1950, month: 12, day: 10}), fourTrackExpressLayout(LineName.IND_QUEENS_BOULEVARD_LINE, true, true), {lat: 40.7122, lon: -73.7867}),
-	...selfPointingPlatformSetObject("169th Street", null, PlatformSetType.UNDERGROUND, DateTime.fromObject({year: 1937, month: 4, day: 24}), fourTrackLocalLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false), {lat: 40.7108, lon: -73.7939}),
-	...selfPointingPlatformSetObject("Parsons Boulevard", null, PlatformSetType.UNDERGROUND, DateTime.fromObject({year: 1937, month: 4, day: 24}), fourTrackExpressLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false), {lat: 40.7078, lon: -73.8035}),
-	...selfPointingPlatformSetObject("Sutphin Boulevard", null, PlatformSetType.UNDERGROUND, DateTime.fromObject({year: 1937, month: 4, day: 24}), fourTrackLocalLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false), {lat: 40.7058, lon: -73.8106}),
-	...selfPointingPlatformSetObject("Briarwood", null, PlatformSetType.UNDERGROUND, DateTime.fromObject({year: 1937, month: 4, day: 24}), fourTrackLocalLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false), {lat: 40.7085, lon: -73.8218}),
-	...selfPointingPlatformSetObject("Kew Gardens-Union Turnpike", null, PlatformSetType.UNDERGROUND, DateTime.fromObject({year: 1936, month: 12, day: 31}), fourTrackExpressLayout(LineName.IND_QUEENS_BOULEVARD_LINE, true, true), {lat: 40.7135, lon: -73.8308}),
-	...selfPointingPlatformSetObject("75th Avenue", null, PlatformSetType.UNDERGROUND, DateTime.fromObject({year: 1936, month: 12, day: 31}), fourTrackLocalLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false), {lat: 40.7175, lon: -73.8371}),
-	...selfPointingPlatformSetObject("Forest Hills-71st Avenue", null, PlatformSetType.UNDERGROUND, DateTime.fromObject({year: 1936, month: 12, day: 31}), fourTrackExpressLayout(LineName.IND_QUEENS_BOULEVARD_LINE, true, true), {lat: 40.7210, lon: -73.8444}),
-	...selfPointingPlatformSetObject("67th Avenue", null, PlatformSetType.UNDERGROUND, DateTime.fromObject({year: 1936, month: 12, day: 31}), fourTrackLocalLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false), {lat: 40.7264, lon: -73.8536}),
-	...selfPointingPlatformSetObject("63rd Drive-Rego Park", null, PlatformSetType.UNDERGROUND, DateTime.fromObject({year: 1936, month: 12, day: 31}), fourTrackLocalLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false), {lat: 40.7293, lon: -73.8615}),
-	...selfPointingPlatformSetObject("Woodhaven Boulevard", null, PlatformSetType.UNDERGROUND, DateTime.fromObject({year: 1936, month: 12, day: 31}), fourTrackLocalLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false), {lat: 40.7330, lon: -73.8701}),
-	...selfPointingPlatformSetObject("Grand Avenue-Newtown", null, PlatformSetType.UNDERGROUND, DateTime.fromObject({year: 1936, month: 12, day: 31}), fourTrackLocalLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false), {lat: 40.7368, lon: -73.8775}),
-	...selfPointingPlatformSetObject("Elmhurst Avenue", null, PlatformSetType.UNDERGROUND, DateTime.fromObject({year: 1936, month: 12, day: 31}), fourTrackLocalLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false), {lat: 40.7420, lon: -73.8818}),
-	...selfPointingPlatformSetObject("Jackson Heights-Roosevelt Avenue", null, PlatformSetType.UNDERGROUND,  DateTime.fromObject({year: 1933, month: 8, day: 19}), fourTrackExpressLayout(LineName.IND_QUEENS_BOULEVARD_LINE, true, true), {lat: 40.7465, lon: -73.8911}),
-	...selfPointingPlatformSetObject("65th Street", null, PlatformSetType.UNDERGROUND, DateTime.fromObject({year: 1933, month: 8, day: 19}), fourTrackLocalLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false), {lat: 40.7492, lon: -73.8974}),
-	...selfPointingPlatformSetObject("Northern Boulevard", null, PlatformSetType.UNDERGROUND, DateTime.fromObject({year: 1933, month: 8, day: 19}), fourTrackLocalSeparatedByTypeLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false), {lat: 40.7531, lon: -73.9067}),
-	//...selfPointingPlatformSetObject("46th Street", null, PlatformSetType.UNDERGROUND, false, DateTime.fromObject({year: 1933, month: 8, day: 19}), twoTrackSideLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false, TrackType.LOCAL)),
-	//...selfPointingPlatformSetObject("Steinway Street", null, PlatformSetType.UNDERGROUND, true, DateTime.fromObject({year: 1933, month: 8, day: 19}), twoTrackSideLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false, TrackType.LOCAL)),
-	...selfPointingPlatformSetObject("46th Street", null, PlatformSetType.UNDERGROUND, DateTime.fromObject({year: 1933, month: 8, day: 19}), twoTrackSideLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false, TrackType.LOCAL), {lat: 40.7567, lon: -73.9141}),
-	...selfPointingPlatformSetObject("Steinway Street", null, PlatformSetType.UNDERGROUND, DateTime.fromObject({year: 1933, month: 8, day: 19}), twoTrackSideLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false, TrackType.LOCAL), {lat: 40.7573, lon: -73.9203}),
-	...selfPointingPlatformSetObject("36th Street", null, PlatformSetType.UNDERGROUND, DateTime.fromObject({year: 1933, month: 8, day: 19}), fourTrackLocalLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false), {lat: 40.7520, lon: -73.9288}),
-	...selfPointingPlatformSetObject("Queens Plaza", null, PlatformSetType.UNDERGROUND, DateTime.fromObject({year: 1933, month: 8, day: 19}), fourTrackExpressLayout(LineName.IND_QUEENS_BOULEVARD_LINE, true, true), {lat: 40.7490, lon: -73.9370}),
-	...selfPointingPlatformSetObject("Court Square-23rd Street", null, PlatformSetType.UNDERGROUND, DateTime.fromObject({year: 1939, month: 8, day: 28}), twoTrackSideLayout(LineName.IND_QUEENS_BOULEVARD_LINE, true, false), {lat: 40.7477, lon: -73.9458}),
-	...selfPointingPlatformSetObject("Lexington Avenue-53rd Street", null, PlatformSetType.UNDERGROUND, DateTime.fromObject({year: 1933, month: 8, day: 19}), twoTrackIslandLayout(LineName.IND_QUEENS_BOULEVARD_LINE, true), {lat: 40.7584, lon: -73.9693}),
-	...selfPointingPlatformSetObject("Fifth Avenue-53rd Street", null, PlatformSetType.UNDERGROUND, DateTime.fromObject({year: 1933, month: 8, day: 19}), twoTrackSeparatedLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false), {lat: 40.7608, lon: -73.9753}),
+	...selfPointingPlatformSetObject("Jamaica-179th Street", null, PlatformSetType.UNDERGROUND, DateTime.fromObject({year: 1950, month: 12, day: 10}), fourTrackExpressLayout(LineName.IND_QUEENS_BOULEVARD_LINE, true, true), coordsForID(469)),
+	...selfPointingPlatformSetObject("169th Street", null, PlatformSetType.UNDERGROUND, DateTime.fromObject({year: 1937, month: 4, day: 24}), fourTrackLocalLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false), coordsForID(344)),
+	...selfPointingPlatformSetObject("Parsons Boulevard", null, PlatformSetType.UNDERGROUND, DateTime.fromObject({year: 1937, month: 4, day: 24}), fourTrackExpressLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false), coordsForID(343)),
+	...selfPointingPlatformSetObject("Sutphin Boulevard", null, PlatformSetType.UNDERGROUND, DateTime.fromObject({year: 1937, month: 4, day: 24}), fourTrackLocalLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false), coordsForID(414)),
+	...selfPointingPlatformSetObject("Briarwood", null, PlatformSetType.UNDERGROUND, DateTime.fromObject({year: 1937, month: 4, day: 24}), fourTrackLocalLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false), coordsForID(410)),
+	...selfPointingPlatformSetObject("Kew Gardens-Union Turnpike", null, PlatformSetType.UNDERGROUND, DateTime.fromObject({year: 1936, month: 12, day: 31}), fourTrackExpressLayout(LineName.IND_QUEENS_BOULEVARD_LINE, true, true), coordsForID(310)),
+	...selfPointingPlatformSetObject("75th Avenue", null, PlatformSetType.UNDERGROUND, DateTime.fromObject({year: 1936, month: 12, day: 31}), fourTrackLocalLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false), coordsForID(309)),
+	...selfPointingPlatformSetObject("Forest Hills-71st Avenue", null, PlatformSetType.UNDERGROUND, DateTime.fromObject({year: 1936, month: 12, day: 31}), fourTrackExpressLayout(LineName.IND_QUEENS_BOULEVARD_LINE, true, true), coordsForID(411)),
+	...selfPointingPlatformSetObject("67th Avenue", null, PlatformSetType.UNDERGROUND, DateTime.fromObject({year: 1936, month: 12, day: 31}), fourTrackLocalLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false), coordsForID(349)),
+	...selfPointingPlatformSetObject("63rd Drive-Rego Park", null, PlatformSetType.UNDERGROUND, DateTime.fromObject({year: 1936, month: 12, day: 31}), fourTrackLocalLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false), coordsForID(348)),
+	...selfPointingPlatformSetObject("Woodhaven Boulevard", null, PlatformSetType.UNDERGROUND, DateTime.fromObject({year: 1936, month: 12, day: 31}), fourTrackLocalLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false), coordsForID(388)),
+	...selfPointingPlatformSetObject("Grand Avenue-Newtown", null, PlatformSetType.UNDERGROUND, DateTime.fromObject({year: 1936, month: 12, day: 31}), fourTrackLocalLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false), coordsForID(401)),
+	...selfPointingPlatformSetObject("Elmhurst Avenue", null, PlatformSetType.UNDERGROUND, DateTime.fromObject({year: 1936, month: 12, day: 31}), fourTrackLocalLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false), coordsForID(402)),
+	...selfPointingPlatformSetObject("Jackson Heights-Roosevelt Avenue", null, PlatformSetType.UNDERGROUND,  DateTime.fromObject({year: 1933, month: 8, day: 19}), fourTrackExpressLayout(LineName.IND_QUEENS_BOULEVARD_LINE, true, true), coordsForID(200)),
+	...selfPointingPlatformSetObject("65th Street", null, PlatformSetType.UNDERGROUND, DateTime.fromObject({year: 1933, month: 8, day: 19}), fourTrackLocalLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false), coordsForID(387)),
+	...selfPointingPlatformSetObject("Northern Boulevard", null, PlatformSetType.UNDERGROUND, DateTime.fromObject({year: 1933, month: 8, day: 19}), fourTrackLocalSeparatedByTypeLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false), coordsForID(396)),
+	...selfPointingPlatformSetObject("46th Street", null, PlatformSetType.UNDERGROUND, DateTime.fromObject({year: 1933, month: 8, day: 19}), twoTrackSideLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false, TrackType.LOCAL), coordsForID(395)),
+	...selfPointingPlatformSetObject("Steinway Street", null, PlatformSetType.UNDERGROUND, DateTime.fromObject({year: 1933, month: 8, day: 19}), twoTrackSideLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false, TrackType.LOCAL), coordsForID(18)),
+	...selfPointingPlatformSetObject("36th Street", null, PlatformSetType.UNDERGROUND, DateTime.fromObject({year: 1933, month: 8, day: 19}), fourTrackLocalLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false), coordsForID(17)),
+	...selfPointingPlatformSetObject("Queens Plaza", null, PlatformSetType.UNDERGROUND, DateTime.fromObject({year: 1933, month: 8, day: 19}), fourTrackExpressLayout(LineName.IND_QUEENS_BOULEVARD_LINE, true, true), coordsForID(27)),
+	...selfPointingPlatformSetObject("Court Square-23rd Street", null, PlatformSetType.UNDERGROUND, DateTime.fromObject({year: 1939, month: 8, day: 28}), twoTrackSideLayout(LineName.IND_QUEENS_BOULEVARD_LINE, true, false), coordsForID(287)),
+	...selfPointingPlatformSetObject("Lexington Avenue-53rd Street", null, PlatformSetType.UNDERGROUND, DateTime.fromObject({year: 1933, month: 8, day: 19}), twoTrackIslandLayout(LineName.IND_QUEENS_BOULEVARD_LINE, true), coordsForID(265)),
+	...selfPointingPlatformSetObject("Fifth Avenue-53rd Street", null, PlatformSetType.UNDERGROUND, DateTime.fromObject({year: 1933, month: 8, day: 19}), twoTrackSeparatedLayout(LineName.IND_QUEENS_BOULEVARD_LINE, false, false), coordsForID(264)),
 	...selfPointingPlatformSetObject("Seventh Avenue", null, PlatformSetType.UNDERGROUND, DateTime.fromObject({year: 1933, month: 8, day: 19}), [[
-		new Track(LineName.IND_QUEENS_BOULEVARD_LINE, TrackType.NORMAL, InternalDirection.NEXT, true),
+		new Track(LineName.IND_QUEENS_BOULEVARD_LINE, TrackType.LOCAL, InternalDirection.NEXT, true),
 		new Platform(PlatformType.ISLAND, false, PlatformService.BOTH),
-		new Track(LineName.IND_SIXTH_AVENUE_LINE, TrackType.NORMAL, InternalDirection.PREVIOUS, true),
+		new Track(LineName.IND_SIXTH_AVENUE_LINE, TrackType.LOCAL, InternalDirection.PREVIOUS, true),
 	], [
-		new Track(LineName.IND_QUEENS_BOULEVARD_LINE, TrackType.NORMAL, InternalDirection.PREVIOUS, true),
+		new Track(LineName.IND_QUEENS_BOULEVARD_LINE, TrackType.LOCAL, InternalDirection.PREVIOUS, true),
 		new Platform(PlatformType.ISLAND, false, PlatformService.BOTH),
-		new Track(LineName.IND_SIXTH_AVENUE_LINE, TrackType.NORMAL, InternalDirection.NEXT, true),
-	]], {lat: 40.7634, lon: -73.9818}),
+		new Track(LineName.IND_SIXTH_AVENUE_LINE, TrackType.LOCAL, InternalDirection.NEXT, true),
+	]], coordsForID(95)),
 	...selfPointingPlatformSetObject("50th Street", null, PlatformSetType.UNDERGROUND, DateTime.fromObject({year: 1933, month: 8, day: 19}), [[
 		new Platform(PlatformType.SIDE, false, PlatformService.DOWN),
 		new Track(LineName.IND_EIGHTH_AVENUE_LINE, TrackType.LOCAL, InternalDirection.NEXT, true),
@@ -157,11 +157,11 @@ const PLATFORM_SETS = {
 		new Platform(PlatformType.SIDE, true, PlatformService.UP),
 	], [
 		new Platform(PlatformType.SIDE, false, PlatformService.DOWN),
-		new Track(LineName.IND_QUEENS_BOULEVARD_LINE, TrackType.NORMAL, InternalDirection.NEXT, true),
+		new Track(LineName.IND_QUEENS_BOULEVARD_LINE, TrackType.LOCAL, InternalDirection.NEXT, true),
 		new Miscellaneous("Wall"), //TODO
-		new Track(LineName.IND_QUEENS_BOULEVARD_LINE, TrackType.NORMAL, InternalDirection.PREVIOUS, true),
+		new Track(LineName.IND_QUEENS_BOULEVARD_LINE, TrackType.LOCAL, InternalDirection.PREVIOUS, true),
 		new Platform(PlatformType.SIDE, true, PlatformService.UP),
-	]], {lat: 40.7623, lon: -73.9860}),
+	]], coordsForID(94)),
 };
 
 const selfPointingStationObjectDefault = (name, boardings, odt) => {return {[name]: new Station(name, [PLATFORM_SETS[name]], boardings, odt)}};
@@ -195,136 +195,154 @@ const STATIONS = {
 	...selfPointingStationObjectDefault("50th Street", 4857531, true),
 };
 
-// QBL track segments: 555, 725, 723, 737, 739, 545, 427, 425, 735, 765, 761, 771, 773
+// TODO may need to be optimized
+const findBorders = (name) => {
+	let start;
+	let end;
+	const checkBorder = (border) => {
+		for(const segmentID of border ?? []){
+			const ts = TRACK_SEGMENTS[segmentID];
+			if(TRACK_SEGMENTS[segmentID].service_segment === name){
+				return;
+			}
+		}
+		if(start === undefined){
+			start = (border ?? []).map(segmentID => TRACK_SEGMENTS[segmentID].service_segment);
+		} else if(end === undefined){
+			end = (border ?? []).map(segmentID => TRACK_SEGMENTS[segmentID].service_segment);
+		} else {
+			throw new Error(`Service segment ${name} has more than two borders`);
+		}
+	}
+	for(const segment of Object.values(TRACK_SEGMENTS)){
+		if(segment.service_segment === name){
+			checkBorder(segment.start);
+			checkBorder(segment.end);
+		}
+	}
+	if(start === undefined || end === undefined){
+		throw new Error(`Service segment ${name} has less than two borders`);
+	}
+	return [start, end];
+}
 
-const selfPointingTrackSegmentObject = (id, line, platformSets, division, type, signaling, obf, opened, used_tracks, unused_tracks, start, end, d) => {return {[id]: new TrackSegment(id, line, platformSets, division, type, signaling, obf, opened, used_tracks, unused_tracks, start, end, d)}};
-
-const TRACK_SEGMENTS = {
-	...selfPointingTrackSegmentObject("QBL1", LineName.IND_QUEENS_BOULEVARD_LINE, [PLATFORM_SETS["Jamaica-179th Street"]], Division.B, PlatformSetType.UNDERGROUND, SignalingType.BLOCK, BuiltFor.IND, DateTime.fromObject({year: 1950, month: 12, day: 10}), 2, 2, [], ["QBL2"], "m487.021 442.843 5.521-2.88 2.641.239 3.601-.479 2.64-.96"),
-	...selfPointingTrackSegmentObject("QBL2", LineName.IND_QUEENS_BOULEVARD_LINE, [PLATFORM_SETS["169th Street"], PLATFORM_SETS["Parsons Boulevard"], PLATFORM_SETS["Sutphin Boulevard"]], Division.B, PlatformSetType.UNDERGROUND, SignalingType.BLOCK, BuiltFor.IND, DateTime.fromObject({year: 1937, month: 4, day: 24}), 2, 2, ["QBL1"], ["QBL3"], "m447.416 454.844.48.72.96.48.96.48 1.92-.24 4.081-1.44 5.761-2.16 6.961-2.88 10.081-3.601 8.401-3.36"),
-	...selfPointingTrackSegmentObject("QBL3", LineName.IND_QUEENS_BOULEVARD_LINE, [PLATFORM_SETS["Briarwood"], PLATFORM_SETS["Kew Gardens-Union Turnpike"]], Division.B, PlatformSetType.UNDERGROUND, SignalingType.BLOCK, BuiltFor.IND, DateTime.fromObject({year: 1937, month: 4, day: 24}), 4, 0, ["QBL2"], ["QBL4"], "m427.733 435.402 5.281 2.88 5.521 2.88 3.12 1.921 1.44 1.439 2.881 6.961 1.439 3.36"),
-	...selfPointingTrackSegmentObject("QBL4", LineName.IND_QUEENS_BOULEVARD_LINE, [PLATFORM_SETS["75th Avenue"]], Division.B, PlatformSetType.UNDERGROUND, SignalingType.COMMUNICATION_BASED, BuiltFor.IND, DateTime.fromObject({year: 1936, month: 12, day: 31}), 4, 0, ["QBL3"], ["QBL5"], "m406.852 420.761 1.92.96 9.602 5.521 2.64 1.92 2.4 2.4 1.921 1.92 2.399 1.921"),
-	...selfPointingTrackSegmentObject("QBL5", LineName.IND_QUEENS_BOULEVARD_LINE, [PLATFORM_SETS["Forest Hills-71st Avenue"], PLATFORM_SETS["67th Avenue"], PLATFORM_SETS["63rd Drive-Rego Park"], PLATFORM_SETS["Woodhaven Boulevard"], PLATFORM_SETS["Grand Avenue-Newtown"], PLATFORM_SETS["Elmhurst Avenue"]], Division.B, PlatformSetType.UNDERGROUND, SignalingType.COMMUNICATION_BASED, BuiltFor.IND, DateTime.fromObject({year: 1936, month: 12, day: 31}), 4, 0, ["QBL4"], ["QBL6"], "m333.402 368.436 4.8 2.88 9.121 5.28 3.601 3.36 3.121 3.121 1.439 2.4.48 1.92.24 1.92.479 1.2 1.681 1.92 1.68.96 3.601 1.68 4.081 1.68 2.64 1.2 1.921 1.681 5.761 2.64 8.4 4.081 7.441 3.84 1.44.96 1.92 1.921.96 1.68 2.16 1.92 3.601 2.161 2.881 1.92"),
-	...selfPointingTrackSegmentObject("QBL6", LineName.IND_QUEENS_BOULEVARD_LINE, [PLATFORM_SETS["Jackson Heights-Roosevelt Avenue"], PLATFORM_SETS["65th Street"], PLATFORM_SETS["Northern Boulevard"]], Division.B, PlatformSetType.UNDERGROUND, SignalingType.COMMUNICATION_BASED, BuiltFor.IND, DateTime.fromObject({year: 1933, month: 8, day: 19}), 4, 0, ["QBL5"], ["QBL7E", "QBL7L"], "m310.359 355.714 5.761 3.12 11.281 6.481 6.001 3.12"),
-	...selfPointingTrackSegmentObject("QBL7L", LineName.IND_QUEENS_BOULEVARD_LINE, [PLATFORM_SETS["46th Street"], PLATFORM_SETS["Steinway Street"]], Division.B, PlatformSetType.UNDERGROUND, SignalingType.COMMUNICATION_BASED, BuiltFor.IND, DateTime.fromObject({year: 1933, month: 8, day: 19}), 2, 0, ["QBL6"], ["QBL8"], "m280.835 356.915 1.44-.48.96-.72 4.08-6.721 2.88-4.561.48-.24.72-.24.72.24 7.201 4.56 11.042 6.961"),
-	...selfPointingTrackSegmentObject("QBL7E", LineName.IND_QUEENS_BOULEVARD_LINE, [], Division.B, PlatformSetType.UNDERGROUND, SignalingType.COMMUNICATION_BASED, BuiltFor.IND, DateTime.fromObject({year: 1933, month: 8, day: 19}), 2, 0, ["QBL6"], ["QBL8"], "m280.835 356.915 2.4-.24 3.6-.96 2.16-.96 2.4-.72 1.68-.24h2.4l2.16.48 1.92.48 1.92.48 2.4.48h1.92l2.161-.48 1.439.24.961.24"), // TODO junction
-	...selfPointingTrackSegmentObject("QBL8", LineName.IND_QUEENS_BOULEVARD_LINE, [PLATFORM_SETS["36th Street"]], Division.B, PlatformSetType.UNDERGROUND, SignalingType.COMMUNICATION_BASED, BuiltFor.IND, DateTime.fromObject({year: 1933, month: 8, day: 19}), 4, 0, ["QBL7E", "QBL7L"], ["QBL9"], "m280.835 356.915-4.081.48-4.081.24-2.88.24-1.68.48"),
-	...selfPointingTrackSegmentObject("QBL9", LineName.IND_QUEENS_BOULEVARD_LINE, [PLATFORM_SETS["Queens Plaza"]], Division.B, PlatformSetType.UNDERGROUND, SignalingType.COMMUNICATION_BASED, BuiltFor.IND, DateTime.fromObject({year: 1933, month: 8, day: 19}), 4, 0, ["QBL8"], ["QBL10"], "m268.114 358.354-1.44.96-2.16 2.4-1.68 1.44-.96.96-1.2.48"),
-	...selfPointingTrackSegmentObject("QBL10", LineName.IND_QUEENS_BOULEVARD_LINE, [], Division.B, PlatformSetType.UNDERGROUND, SignalingType.COMMUNICATION_BASED, BuiltFor.IND, DateTime.fromObject({year: 1933, month: 8, day: 19}), 4, 0, ["QBL9"], ["QBL11"], "m260.673 364.595-1.92.72-4.32 2.16"),
-	...selfPointingTrackSegmentObject("QBL11", LineName.IND_QUEENS_BOULEVARD_LINE, [PLATFORM_SETS["Court Square-23rd Street"], PLATFORM_SETS["Lexington Avenue-53rd Street"], PLATFORM_SETS["Fifth Avenue-53rd Street"]], Division.B, PlatformSetType.UNDERGROUND, SignalingType.COMMUNICATION_BASED, BuiltFor.IND, DateTime.fromObject({year: 1933, month: 8, day: 19}), 2, 0, ["QBL10"], ["QBL12"], "m254.432 367.476-1.44.24-13.441-3.6-4.801-.96-.96-.72-10.801-11.041-1.2-.96-10.562-5.521-13.922-7.681"),
-	...selfPointingTrackSegmentObject("QBL12", LineName.IND_QUEENS_BOULEVARD_LINE, [PLATFORM_SETS["Seventh Avenue"], PLATFORM_SETS["50th Street"]], Division.B, PlatformSetType.UNDERGROUND, SignalingType.COMMUNICATION_BASED, BuiltFor.IND, DateTime.fromObject({year: 1933, month: 8, day: 19}), 2, 0, ["QBL11"], [], "m197.305 337.232-2.4-1.2-6.48-3.6h-.72l-.72.48-.48.24-2.64 5.04"),
+const selfPointingServiceSegmentObject = (name, platformSets, nextDirection) => {
+	const [start, end] = findBorders(name);
+	return {[name]: new ServiceSegment(name, platformSets, nextDirection, start, end)}
 };
 
-const fillInSegments = (start, end, direction=InternalDirection.NEXT) => {
-	const answer = [start];
-	const key = direction === InternalDirection.NEXT ? "end" : "start";
-	let segment = start;
-	while(segment !== end){
-		const edge = TRACK_SEGMENTS[segment][key];
-		if(edge.length > 1){
-			throw new Error(`Can't unambiguously fill in ${start} to ${end}: ${segment} ${key}s with junction`);
-		}
-		if(edge.length == 0){
-			throw new Error(`Can't fill in ${start} to ${end}: ${segment} ${key}s with bumper blocks`);
-		}
-		segment = edge[0];
-		answer.push(segment);
-	}
-	return answer;
-}
+const SERVICE_SEGMENTS = {
+	...selfPointingServiceSegmentObject("QB1", [PLATFORM_SETS["Jamaica-179th Street"], PLATFORM_SETS["169th Street"], PLATFORM_SETS["Parsons Boulevard"], PLATFORM_SETS["Sutphin Boulevard"]], CardinalDirection.SOUTH),
+	...selfPointingServiceSegmentObject("QB2", [PLATFORM_SETS["Briarwood"], PLATFORM_SETS["Kew Gardens-Union Turnpike"], PLATFORM_SETS["75th Avenue"]], CardinalDirection.SOUTH),
+	...selfPointingServiceSegmentObject("QB3", [PLATFORM_SETS["Forest Hills-71st Avenue"], PLATFORM_SETS["67th Avenue"], PLATFORM_SETS["63rd Drive-Rego Park"], PLATFORM_SETS["Woodhaven Boulevard"], PLATFORM_SETS["Grand Avenue-Newtown"], PLATFORM_SETS["Elmhurst Avenue"]], CardinalDirection.SOUTH),
+	...selfPointingServiceSegmentObject("QB4", [PLATFORM_SETS["Jackson Heights-Roosevelt Avenue"], PLATFORM_SETS["65th Street"], PLATFORM_SETS["Northern Boulevard"]], CardinalDirection.SOUTH),
+	...selfPointingServiceSegmentObject("QB5L", [PLATFORM_SETS["46th Street"], PLATFORM_SETS["Steinway Street"]], CardinalDirection.SOUTH),
+	...selfPointingServiceSegmentObject("QB5E", [], CardinalDirection.SOUTH),
+	...selfPointingServiceSegmentObject("QB6", [PLATFORM_SETS["36th Street"]], CardinalDirection.SOUTH),
+	...selfPointingServiceSegmentObject("QBAS1", [], CardinalDirection.SOUTH),
+	...selfPointingServiceSegmentObject("QBAS2", [], CardinalDirection.SOUTH),
+	...selfPointingServiceSegmentObject("QBAS3", [], CardinalDirection.SOUTH),
+	...selfPointingServiceSegmentObject("QB7", [PLATFORM_SETS["Queens Plaza"]], CardinalDirection.SOUTH),
+	...selfPointingServiceSegmentObject("QB8", [], CardinalDirection.SOUTH),
+	...selfPointingServiceSegmentObject("QB9", [], CardinalDirection.SOUTH),
+	...selfPointingServiceSegmentObject("QB10", [PLATFORM_SETS["Court Square-23rd Street"], PLATFORM_SETS["Lexington Avenue-53rd Street"], PLATFORM_SETS["Fifth Avenue-53rd Street"]], CardinalDirection.SOUTH),
+	...selfPointingServiceSegmentObject("QB11", [], CardinalDirection.SOUTH),
+	...selfPointingServiceSegmentObject("QB12", [PLATFORM_SETS["Seventh Avenue"]], CardinalDirection.SOUTH),
+	...selfPointingServiceSegmentObject("QB13", [PLATFORM_SETS["50th Street"]], CardinalDirection.SOUTH),
+};
 
 const segmentsWithType = (segments, type) => segments.map(s => new SegmentServiceType(s, type))
 
 const SERVICES = {
 	[Service.E]: [
-		// Full express
-		new ServicePattern("E Eighth Avenue Local", "Weekdays 7 AM to 7 PM", ServiceDirection.BOTH, new ServiceTime(ServiceType.NO, ServiceType.YES, ServiceType.YES, ServiceType.NO, ServiceType.NO, ServiceType.NO), [
-			...segmentsWithType([...fillInSegments("QBL3", "QBL6"), "QBL7E", ...fillInSegments("QBL8", "QBL10")], TrackType.EXPRESS),
-			...segmentsWithType(["QBL11", "QBL12"], TrackType.NORMAL),
-		], []),
-		// Express after forest hills
-		new ServicePattern("E Eighth Avenue Local", "Weekends all day, Weekdays 6 - 7 AM and 7 - 9:30 PM", ServiceDirection.BOTH, new ServiceTime(ServiceType.YES, ServiceType.NO, ServiceType.NO, ServiceType.YES, ServiceType.NO, ServiceType.YES), [
-			...segmentsWithType(["QBL3", "QBL4"], TrackType.LOCAL),
-			...segmentsWithType(["QBL5", "QBL6", "QBL7E", ...fillInSegments("QBL8", "QBL10")], TrackType.EXPRESS),
-			...segmentsWithType(["QBL11", "QBL12"], TrackType.NORMAL),
-		], []),
-		// Full local
-		// TODO need to describe late night service better
-		new ServicePattern("E Eighth Avenue Local", "10 PM - 5 AM (6 AM Weekends)", ServiceDirection.NORTH, new ServiceTime(ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.YES, ServiceType.NO), [
-			...segmentsWithType([...fillInSegments("QBL3", "QBL6"), "QBL7L", "QBL8"], TrackType.LOCAL),
-			...segmentsWithType(["QBL9", "QBL10"], TrackType.EXPRESS),
-			...segmentsWithType(["QBL11", "QBL12"], TrackType.NORMAL),
-		], []),
-		new ServicePattern("E Eighth Avenue Local", "10 PM - 5 AM (6 AM Weekends)", ServiceDirection.SOUTH, new ServiceTime(ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.YES, ServiceType.NO), [
-			...segmentsWithType([...fillInSegments("QBL3", "QBL6"), "QBL7L", ...fillInSegments("QBL8", "QBL10")], TrackType.LOCAL),
-			...segmentsWithType(["QBL11", "QBL12"], TrackType.NORMAL),
-		], []),
+		new ServiceInformation(Service.E, "Eighth Avenue Local", [
+			// Full express
+			new ServicePattern("Weekdays 7 AM to 7 PM", ServiceDirection.BOTH, new ServiceTime(ServiceType.NO, ServiceType.YES, ServiceType.YES, ServiceType.NO, ServiceType.NO, ServiceType.NO), [
+				...segmentsWithType(["QB2", "QB3", "QB4", "QB5E", "QB6", "QBAS1", "QBAS2", "QBAS3", "QB7", "QB8", "QB9"], TrackType.EXPRESS),
+				...segmentsWithType(["QB10", "QB11", "QB12", "QB13"], TrackType.LOCAL),
+			], []),
+			// Express after forest hills
+			new ServicePattern("Weekends all day, Weekdays 6 - 7 AM and 7 - 9:30 PM", ServiceDirection.BOTH, new ServiceTime(ServiceType.YES, ServiceType.NO, ServiceType.NO, ServiceType.YES, ServiceType.NO, ServiceType.YES), [
+				...segmentsWithType(["QB2"], TrackType.LOCAL),
+				...segmentsWithType(["QB3", "QB4", "QB5E", "QB6", "QBAS1", "QBAS2", "QBAS3", "QB7", "QB8", "QB9"], TrackType.EXPRESS),
+				...segmentsWithType(["QB10", "QB11", "QB12", "QB13"], TrackType.LOCAL),
+			], []),
+			// Full local
+			// TODO need to describe late night service better
+			new ServicePattern("10 PM - 5 AM (6 AM Weekends)", ServiceDirection.NORTH, new ServiceTime(ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.YES, ServiceType.NO), [
+				...segmentsWithType(["QB2", "QB3", "QB4", "QB5L", "QB6", "QBAS1", "QBAS2"], TrackType.LOCAL),
+				...segmentsWithType(["QBAS3", "QB7", "QB8", "QB9"], TrackType.EXPRESS),
+				...segmentsWithType(["QB10", "QB11", "QB12", "QB13"], TrackType.LOCAL),
+			], []),
+			new ServicePattern("10 PM - 5 AM (6 AM Weekends)", ServiceDirection.SOUTH, new ServiceTime(ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.YES, ServiceType.NO), [
+				...segmentsWithType(["QB2", "QB3", "QB4", "QB5L", "QB6", "QBAS1", "QBAS2", "QBAS3", "QB7"], TrackType.LOCAL),
+				...segmentsWithType(["QB8", "QB9"], TrackType.EXPRESS),
+				...segmentsWithType(["QB10", "QB11", "QB12", "QB13"], TrackType.LOCAL),
+			], []),
 
 
-		// Select service
-		new ServicePattern("E Eighth Avenue Local", "Select rush hour trips", ServiceDirection.BOTH, new ServiceTime(ServiceType.NO, ServiceType.SELECT, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO), [
-			...segmentsWithType([...fillInSegments("QBL1", "QBL6"), "QBL7E", ...fillInSegments("QBL8", "QBL10")], TrackType.EXPRESS),
-			...segmentsWithType(["QBL11", "QBL12"], TrackType.NORMAL),
-		], []),
-		new ServicePattern("E Eighth Avenue Local", "Select Queens-bound evening trips", ServiceDirection.NORTH, new ServiceTime(ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.SELECT, ServiceType.NO, ServiceType.NO), [
-			...segmentsWithType([...fillInSegments("QBL1", "QBL4")], TrackType.LOCAL),
-			...segmentsWithType(["QBL5", "QBL6", "QBL7E", ...fillInSegments("QBL8", "QBL10", InternalDirection.NEXT)], TrackType.EXPRESS),
-			...segmentsWithType(["QBL11", "QBL12"], TrackType.NORMAL),
-		], []),
-		new ServicePattern("E Eighth Avenue Local", "Queens-bound trips Saturdays 6:30 - 7:30 AM and Sundays 6:30 - 8:30 AM", ServiceDirection.NORTH, new ServiceTime(ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.SELECT), [
-			...segmentsWithType([...fillInSegments("QBL3", "QBL5")], TrackType.LOCAL),
-			...segmentsWithType(["QBL6", "QBL7E", ...fillInSegments("QBL8", "QBL10")], TrackType.EXPRESS),
-			...segmentsWithType(["QBL11", "QBL12"], TrackType.NORMAL),
-		], []),
+			// Select service - Express after Roosevelt av
+			new ServicePattern("Queens-bound trips Saturdays 6:30 - 7:30 AM and Sundays 6:30 - 8:30 AM", ServiceDirection.NORTH, new ServiceTime(ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.SELECT), [
+				...segmentsWithType(["QB2", "QB3"], TrackType.LOCAL),
+				...segmentsWithType(["QB4", "QB5E", "QB6", "QBAS1", "QBAS2", "QBAS3", "QB7", "QB8", "QB9"], TrackType.EXPRESS),
+				...segmentsWithType(["QB10", "QB11", "QB12", "QB13"], TrackType.LOCAL),
+			], []),
+		]),
 	],
 
 	[Service.F]: [
-		new ServicePattern("F Queens Boulevard Express/Sixth Avenue Local", "Weekdays 5 AM - 10:30 PM, Saturdays 6 AM - 9 PM, Sundays 7 AM - 9 PM", ServiceDirection.BOTH, new ServiceTime(ServiceType.YES, ServiceType.YES, ServiceType.YES, ServiceType.YES, ServiceType.NO, ServiceType.YES), [
-			...segmentsWithType([...fillInSegments("QBL1", "QBL4")], TrackType.LOCAL),
-			...segmentsWithType(["QBL5", "QBL6", "QBL7E", "QBL8"], TrackType.EXPRESS),
-		], []),
-		// TODO need to describe late night service better
-		new ServicePattern("F Queens Boulevard Express/Sixth Avenue Local", "Weekdays 10:30 PM - 5 AM, Saturdays 6 AM - 9 PM", ServiceDirection.BOTH, new ServiceTime(ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.YES, ServiceType.NO), [
-			...segmentsWithType([...fillInSegments("QBL1", "QBL6"), "QBL7L", "QBL8"], TrackType.LOCAL),
-		], []),
+		new ServiceInformation(Service.F, "Queens Boulevard Express/Sixth Avenue Local", [
+			new ServicePattern("Weekdays 5 AM - 10:30 PM, Saturdays 6 AM - 9 PM, Sundays 7 AM - 9 PM", ServiceDirection.BOTH, new ServiceTime(ServiceType.YES, ServiceType.YES, ServiceType.YES, ServiceType.YES, ServiceType.NO, ServiceType.YES), [
+				...segmentsWithType(["QB1", "QB2"], TrackType.LOCAL),
+				...segmentsWithType(["QB3", "QB4", "QB5E", "QB6", "QBAS1"], TrackType.EXPRESS),
+			], []),
+			// TODO need to describe late night service better
+			new ServicePattern("Weekdays 10:30 PM - 5 AM, Saturdays 6 AM - 9 PM", ServiceDirection.BOTH, new ServiceTime(ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.YES, ServiceType.NO), [
+				...segmentsWithType(["QB1", "QB2", "QB3", "QB4", "QB5E", "QB6", "QBAS1"], TrackType.LOCAL),
+			], []),
 
-		// Select service,
-		new ServicePattern("F Queens Boulevard Express/Sixth Avenue Local", "Queens-bound trips Saturdays 6:30 - 7:30 AM and Sundays 6:30 - 8:30 AM", ServiceDirection.NORTH, new ServiceTime(ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.SELECT), [
-			...segmentsWithType([...fillInSegments("QBL3", "QBL5")], TrackType.LOCAL),
-			...segmentsWithType(["QBL6", "QBL7E", "QBL8"], TrackType.EXPRESS),
-		], []),
-	],
+			// Select service - Express after Roosevelt av
+			new ServicePattern("Queens-bound trips Saturdays 6:30 - 7:30 AM and Sundays 6:30 - 8:30 AM", ServiceDirection.NORTH, new ServiceTime(ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.SELECT), [
+				...segmentsWithType(["QB1", "QB2", "QB3"], TrackType.LOCAL),
+				...segmentsWithType(["QB4", "QB5E", "QB6", "QBAS1"], TrackType.EXPRESS),
+			], []),
+		]),
 
-	[Service.Fd]: [// F express train
-		new ServicePattern("F Queens Boulevard Express/Sixth Avenue Local", "Rush hours, two trains in each direction", ServiceDirection.BOTH, new ServiceTime(ServiceType.NO, ServiceType.SELECT, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO), [
-			...segmentsWithType([...fillInSegments("QBL1", "QBL4")], TrackType.LOCAL),
-			...segmentsWithType(["QBL5", "QBL6", "QBL7E", "QBL8"], TrackType.EXPRESS),
-		])
+		new ServiceInformation(Service.Fd, "Queens Boulevard Express/Sixth Avenue Local", [// F express train
+			new ServicePattern("Rush hours, two trains in each direction", ServiceDirection.BOTH, new ServiceTime(ServiceType.NO, ServiceType.SELECT, ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.NO), [
+				...segmentsWithType(["QB1", "QB2"], TrackType.LOCAL),
+				...segmentsWithType(["QB3", "QB4", "QB5E", "QB6", "QBAS1"], TrackType.EXPRESS),
+			], []),
+		]),
 	],
 
 	[Service.R]: [
-		new ServicePattern("R Broadway Local", "Everyday 6 AM - 10:30 PM", ServiceDirection.BOTH, new ServiceTime(ServiceType.YES, ServiceType.YES, ServiceType.YES, ServiceType.YES, ServiceType.NO, ServiceType.YES), [
-			...segmentsWithType(["QBL5", "QBL6", "QBL7L", "QBL8", "QBL9"], TrackType.LOCAL),
-		], []),
+		new ServiceInformation(Service.R, "Broadway Local", [
+			new ServicePattern("Everyday 6 AM - 10:30 PM", ServiceDirection.BOTH, new ServiceTime(ServiceType.YES, ServiceType.YES, ServiceType.YES, ServiceType.YES, ServiceType.NO, ServiceType.YES), [
+				...segmentsWithType(["QB3", "QB4", "QB5L", "QB6", "QBAS1", "QBAS2", "QBAS3", "QB7", "QB8"], TrackType.LOCAL),
+			], []),
 
-		new ServicePattern("R Broadway Local", "Queens-bound trips 10 PM - Midnight", ServiceDirection.NORTH, new ServiceTime(ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.SELECT, ServiceType.NO, ServiceType.SELECT), [
-			...segmentsWithType(["QBL9"], TrackType.LOCAL),
-		], []),
+			new ServicePattern("Queens-bound trips 10 PM - Midnight", ServiceDirection.NORTH, new ServiceTime(ServiceType.NO, ServiceType.NO, ServiceType.NO, ServiceType.SELECT, ServiceType.NO, ServiceType.SELECT), [
+				...segmentsWithType(["QB7", "QB8"], TrackType.LOCAL),
+			], []),
+		]),
 	],
 
 	[Service.M]: [
-		new ServicePattern("M Queens Boulevard Local/Sixth Avenue Local", "Weekdays 6 AM - 9:30 PM", ServiceDirection.NORTH, new ServiceTime(ServiceType.YES, ServiceType.YES, ServiceType.YES, ServiceType.YES, ServiceType.NO, ServiceType.NO), [
-			...segmentsWithType(["QBL5", "QBL6", "QBL7L", "QBL8"], TrackType.LOCAL),
-			...segmentsWithType(["QBL9", "QBL10"], TrackType.EXPRESS),
-			...segmentsWithType(["QBL11"], TrackType.NORMAL),
-		], []),
+		new ServiceInformation(Service.M, "Queens Boulevard Local/Sixth Avenue Local", [
+			new ServicePattern("Weekdays 6 AM - 9:30 PM", ServiceDirection.NORTH, new ServiceTime(ServiceType.YES, ServiceType.YES, ServiceType.YES, ServiceType.YES, ServiceType.NO, ServiceType.NO), [
+				...segmentsWithType(["QB3", "QB4", "QB5L", "QB6", "QBAS1", "QBAS2"], TrackType.LOCAL),
+				...segmentsWithType(["QBAS3", "QB7", "QB8", "QB9"], TrackType.EXPRESS),
+				...segmentsWithType(["QB10"], TrackType.LOCAL),
+			], []),
 
-		new ServicePattern("M Queens Boulevard Local/Sixth Avenue Local", "Weekdays 6 AM - 9:30 PM", ServiceDirection.SOUTH, new ServiceTime(ServiceType.YES, ServiceType.YES, ServiceType.YES, ServiceType.YES, ServiceType.NO, ServiceType.NO), [
-			...segmentsWithType(["QBL5", "QBL6", "QBL7L", "QBL8", "QBL9"], TrackType.LOCAL),
-			...segmentsWithType(["QBL10"], TrackType.EXPRESS),
-			...segmentsWithType(["QBL11"], TrackType.NORMAL),
-		], []),
-	]
+			new ServicePattern("Weekdays 6 AM - 9:30 PM", ServiceDirection.SOUTH, new ServiceTime(ServiceType.YES, ServiceType.YES, ServiceType.YES, ServiceType.YES, ServiceType.NO, ServiceType.NO), [
+				...segmentsWithType(["QB3", "QB4", "QB5L", "QB6", "QBAS1", "QBAS2", "QBAS3", "QB7"], TrackType.LOCAL),
+				...segmentsWithType(["QB8", "QB9"], TrackType.EXPRESS),
+				...segmentsWithType(["QB10"], TrackType.LOCAL),
+			], []),
+		]),
+	],
 };
 
 const accumulateTrackServiceTime = (track, service, nextStop, lastStop, time) => {
@@ -344,83 +362,88 @@ const accumulateTrackServiceTime = (track, service, nextStop, lastStop, time) =>
 // Filling in: Fill platform sets with service times, fill servicepattern with stations stopped at/skipped
 // Verification: Do service patterns make sense with respect to lines and junctions
 // TODO reduced platform set names (iterate through stations)
-for(const service in SERVICES){
-	for(const pattern of SERVICES[service]){
-		const compiledRoute = []; // Array of ServiceStop objects, list of all stations passed through and whether route stops
-		let index = null;
-		let prevSegment = null;
-		let prevMap = null;
-		for(let i = 0; i < pattern.route.length; i++){
-			const trackSegment = TRACK_SEGMENTS[pattern.route[i].trackSegment];
-			const {type} = pattern.route[i];
-			let internalDirection; // Internal direction that corresponds to rail north
-			// TODO could eliminate code duplication
-			if(i !== 0){
-				const {trackSegment: lastTrackSegment} = pattern.route[i - 1];
-				if(trackSegment.start.includes(lastTrackSegment)){
-					internalDirection = InternalDirection.PREVIOUS;
-				} else if(trackSegment.end.includes(lastTrackSegment)){
-					internalDirection = InternalDirection.NEXT;
-				} else {
-					throw new Error(`${pattern.route[i].trackSegment} has no connection to ${lastTrackSegment}`);
-				}
-			}
-			if(i !== pattern.route.length - 1){
-				const {trackSegment: nextTrackSegment} = pattern.route[i + 1];
-				if(trackSegment.start.includes(nextTrackSegment)){
-					if(internalDirection === InternalDirection.PREVIOUS){
-						throw new Error(`${trackSegment} contradictory direction going to ${nextTrackSegment}`);
+for(const parentService in SERVICES){
+	for(const serviceInformation of SERVICES[parentService]){
+		const {service, servicePatterns} = serviceInformation;
+		for(const pattern of servicePatterns){
+			const compiledRoute = []; // Array of ServiceStop objects, list of all stations passed through and whether route stops
+			let index = null;
+			let prevSegment = null;
+			let prevMap = null;
+			for(let i = 0; i < pattern.route.length; i++){
+				const serviceSegment = SERVICE_SEGMENTS[pattern.route[i].serviceSegment];
+				const {type} = pattern.route[i];
+				// TODO the concept of "internal direction" is not used correctly here. This will not work with wrong-way concurrencies.
+				let internalDirection; // Internal direction that corresponds to rail north
+				// TODO could eliminate code duplication
+				if(i !== 0){
+					const {serviceSegment: lastServiceSegment} = pattern.route[i - 1];
+					if(serviceSegment.start.includes(lastServiceSegment)){
+						internalDirection = InternalDirection.PREVIOUS;
+					} else if(serviceSegment.end.includes(lastServiceSegment)){
+						internalDirection = InternalDirection.NEXT;
+					} else {
+						throw new Error(`${pattern.route[i].serviceSegment} has no connection to ${lastServiceSegment}`);
 					}
-					internalDirection = InternalDirection.NEXT;
-				} else if(trackSegment.end.includes(nextTrackSegment)){
-					if(internalDirection === InternalDirection.NEXT){
-						throw new Error(`${trackSegment} contradictory direction going to ${nextTrackSegment}`);
-					}
-					internalDirection = InternalDirection.PREVIOUS;
-				} else {
-					throw new Error(`${pattern.route[i].trackSegment} has no connection to ${nextTrackSegment}`);
 				}
-			}
-			let ignoreDirection = null;
-			if(pattern.serviceDirection === ServiceDirection.NORTH){
-				ignoreDirection = internalDirection === InternalDirection.NEXT ? InternalDirection.PREVIOUS : InternalDirection.NEXT;
-			} else if(pattern.serviceDirection === ServiceDirection.SOUTH){
-				ignoreDirection = internalDirection;
-			}
-			for(const platformSet of trackSegment.platformSets){
-				let trackNext;
-				let trackPrevious;
-				for(const floor of platformSet.layout){
-					for(const track of floor){
-						// TODO direction doesn't work
-						if(track.direction === InternalDirection.NEXT && ignoreDirection !== InternalDirection.NEXT && track.type === type){
-							trackNext = track; // TODO incorporate skips
-							// To differentiate on next/last stop: do this later?
-							//track.service[service] = track.service[service] === undefined ? accumulateServiceTime([pattern.serviceTime]) : accumulateServiceTime([track.service[service], pattern.serviceTime]);
+				if(i !== pattern.route.length - 1){
+					const {serviceSegment: nextServiceSegment} = pattern.route[i + 1];
+					if(serviceSegment.start.includes(nextServiceSegment)){
+						if(internalDirection === InternalDirection.PREVIOUS){
+							throw new Error(`${serviceSegment} contradictory direction going to ${nextServiceSegment}`);
 						}
-						if(track.direction === InternalDirection.PREVIOUS && ignoreDirection !== InternalDirection.PREVIOUS && track.type === type){
-							trackPrevious = track;
-							//track.service[service] = track.service[service] === undefined ? accumulateServiceTime([pattern.serviceTime]) : accumulateServiceTime([track.service[service], pattern.serviceTime]);
+						internalDirection = InternalDirection.NEXT;
+					} else if(serviceSegment.end.includes(nextServiceSegment)){
+						if(internalDirection === InternalDirection.NEXT){
+							throw new Error(`${serviceSegment} contradictory direction going to ${nextServiceSegment}`);
 						}
+						internalDirection = InternalDirection.PREVIOUS;
+					} else {
+						throw new Error(`${pattern.route[i].serviceSegment} has no connection to ${nextServiceSegment}`);
 					}
 				}
-				if((trackNext === undefined && ignoreDirection !== InternalDirection.NEXT) || (trackPrevious === undefined && ignoreDirection !== InternalDirection.PREVIOUS)){
-					throw new Error(`Track of type ${type} not found in ${platformSet.name}`);
+				let ignoreDirection = null;
+				if(pattern.serviceDirection === ServiceDirection.NORTH){
+					ignoreDirection = internalDirection === InternalDirection.NEXT ? InternalDirection.PREVIOUS : InternalDirection.NEXT;
+				} else if(pattern.serviceDirection === ServiceDirection.SOUTH){
+					ignoreDirection = internalDirection;
 				}
-				compiledRoute.push(new ServiceStop(platformSet.name, trackNext, trackPrevious));
+				for(const platformSet of serviceSegment.platformSets){
+					let trackNext;
+					let trackPrevious;
+					for(const floor of platformSet.layout){
+						for(const track of floor){
+							// TODO direction doesn't work
+							if(track.direction === InternalDirection.NEXT && ignoreDirection !== InternalDirection.NEXT && track.type === type){
+								trackNext = track; // TODO incorporate skips
+								// To differentiate on next/last stop: do this later?
+								//track.service[service] = track.service[service] === undefined ? accumulateServiceTime([pattern.serviceTime]) : accumulateServiceTime([track.service[service], pattern.serviceTime]);
+							}
+							if(track.direction === InternalDirection.PREVIOUS && ignoreDirection !== InternalDirection.PREVIOUS && track.type === type){
+								trackPrevious = track;
+								//track.service[service] = track.service[service] === undefined ? accumulateServiceTime([pattern.serviceTime]) : accumulateServiceTime([track.service[service], pattern.serviceTime]);
+							}
+						}
+					}
+					if((trackNext === undefined && ignoreDirection !== InternalDirection.NEXT) || (trackPrevious === undefined && ignoreDirection !== InternalDirection.PREVIOUS)){
+						throw new Error(`Track of type ${type} not found in ${platformSet.name}`);
+					}
+					compiledRoute.push(new ServiceStop(platformSet.name, trackNext, trackPrevious));
+				}
 			}
-		}
-		pattern.compiledRoute = compiledRoute;
-		const lastStopNext = compiledRoute[compiledRoute.length - 1].stop;
-		const lastStopPrevious = compiledRoute[0].stop;
-		for(let i = 0; i < compiledRoute.length; i++){
-			const {trackNext, trackPrevious} = compiledRoute[i];
-			const nextStopNext = compiledRoute.find((el, index) => el.trackNext?.stops === true && index > i)?.stop ?? "\"\"";
-			const nextStopPrevious = compiledRoute.toReversed().find((el, index) => el.trackPrevious?.stops === true && index >= (compiledRoute.length - i))?.stop ?? "\"\"";
-			accumulateTrackServiceTime(trackNext, service, nextStopNext, lastStopNext, pattern.serviceTime);
-			accumulateTrackServiceTime(trackPrevious, service, nextStopPrevious, lastStopPrevious, pattern.serviceTime);
+			pattern.compiledRoute = compiledRoute;
+			const lastStopNext = compiledRoute[compiledRoute.length - 1].stop;
+			const lastStopPrevious = compiledRoute[0].stop;
+			for(let i = 0; i < compiledRoute.length; i++){
+				const {trackNext, trackPrevious} = compiledRoute[i];
+				const nextStopNext = compiledRoute.find((el, index) => el.trackNext?.stops === true && index > i)?.stop ?? "\"\"";
+				const nextStopPrevious = compiledRoute.toReversed().find((el, index) => el.trackPrevious?.stops === true && index >= (compiledRoute.length - i))?.stop ?? "\"\"";
+				accumulateTrackServiceTime(trackNext, service, nextStopNext, lastStopNext, pattern.serviceTime);
+				accumulateTrackServiceTime(trackPrevious, service, nextStopPrevious, lastStopPrevious, pattern.serviceTime);
+			}
 		}
 	}
+	
 }
 
 for(const platformSet of Object.values(PLATFORM_SETS)){
@@ -437,12 +460,35 @@ for(const platformSet of Object.values(PLATFORM_SETS)){
 	}
 }
 
+// Assign track compass directions
+const oppositeDirections = {"North" : "South", "South": "North", "East": "West", "West": "East"};
+for(const serviceSegment of Object.values(SERVICE_SEGMENTS)){
+	const {platformSets, nextDirection} = serviceSegment;
+	for(const platformSet of platformSets){
+		for(const floor of platformSet.layout){
+			for(const track of floor){
+				if(track.category !== "Track"){
+					continue;
+				}
+				// TODO when implementing multi-line sets: add an if statement here for line
+				// TODO bidirectional tracks
+				if(track.direction === InternalDirection.NEXT){
+					track.compassDirection = nextDirection;
+				} else {
+					track.compassDirection = oppositeDirections[nextDirection];
+				}
+				
+			}
+		}
+	}
+}
+
 // TODO fails in a tie, although that case is unlikely
 Object.entries(STATIONS).toSorted(([_, a], [__, b]) => b.boardings - a.boardings).forEach(([stationKey, station], index) => {
 	station.rank = index + 1;
 	station.platformSets.forEach(platformSet => {platformSet.stationKey = stationKey});
 });
 const MIN_BOARDINGS = Math.min(...Object.values(STATIONS).map(({boardings}) => boardings));
-Object.values(TRACK_SEGMENTS).forEach(({line, platformSets}) => {platformSets.forEach(platformSet => {platformSet.lines.push(line)})})
+Object.values(SERVICE_SEGMENTS).forEach(({line, platformSets}) => {platformSets.forEach(platformSet => {platformSet.lines.push(line)})})
 
 export {TRACK_SEGMENTS, PLATFORM_SETS, SERVICES, STATIONS, MIN_BOARDINGS}

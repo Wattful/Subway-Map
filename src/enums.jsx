@@ -54,7 +54,6 @@ const LineName = Enum({
 	IRT_WHITE_PLAINS_ROAD_LINE: "IRT White Plains Road Line",
 });
 
-// TODO "d" services are a temp solution
 const Service = Enum({
 	A: "A",
 	B: "B",
@@ -85,6 +84,7 @@ const Service = Enum({
 	"7d": "7d",
 });
 
+// TODO change name
 const PlatformSetType = Enum({
 	UNDERGROUND: "Underground",
 	ELEVATED: "Elevated",
@@ -94,7 +94,6 @@ const PlatformSetType = Enum({
 });
 
 const TrackType = Enum({
-	NORMAL: "Normal",
 	LOCAL: "Local",
 	EXPRESS: "Express",
 	PEAK_DIRECTION_EXPRESS: "Peak-Direction Express",
@@ -125,6 +124,14 @@ const ServiceDirection = Enum({
 	BOTH: "Both",
 });
 
+// If service direction is unambiguous, use that. Otherwise, use geographic direction TODO?
+const CardinalDirection = Enum({
+	NORTH: "North",
+	SOUTH: "South",
+	EAST: "East",
+	WEST: "West",
+});
+
 const Division = Enum({
 	A: "A",
 	B: "B",
@@ -134,12 +141,6 @@ const Division = Enum({
 const SignalingType = Enum({
 	BLOCK: "Block",
 	COMMUNICATION_BASED: "Communication-Based",
-});
-
-const JunctionType = Enum({
-	GRADE: "Grade",
-	FLYING: "Flying",
-	SEPARATING: "Separating", // "Tracks become"
 });
 
 const BuiltFor = Enum({
@@ -166,9 +167,9 @@ export {
 	PlatformService,
 	InternalDirection,
 	ServiceDirection,
+	CardinalDirection,
 	Division,
 	SignalingType,
-	JunctionType,
 	BuiltFor,
 	ServiceType,
 }
