@@ -1,7 +1,7 @@
 import React, {useState, useEffect} from "react";
 import {BrowserRouter, Route, Routes, Link, useSearchParams, useParams} from "react-router-dom";
 import {DateTime, Interval} from "luxon";
-import {PLATFORM_SETS, SERVICES, STATIONS, MIN_BOARDINGS} from "./data.jsx";
+import {SERVICES, STATIONS, PLATFORM_SETS, MIN_BOARDINGS} from "./data.jsx";
 import {BULLETS} from "./bullets.jsx";
 import {TRACK_SEGMENTS} from "./tsdata.jsx"
 import {
@@ -22,8 +22,6 @@ import {serviceTimeEqual} from "./objects.jsx";
 
 // Misc TODO 
 // circle/highlight/border station dots
-// hardcoded line name positions
-// line focus?
 // Better representation of scaled stations
 // Bullet ordering
 // Better color scheme
@@ -41,6 +39,8 @@ function Subway({}){
 		</BrowserRouter>
 	);
 }
+
+const BACKGROUND_SRC = require("./shoreline.png");
 
 const selfPointingTrackAttributeObject = (attribute, name, visible, options, discrete) => {return {[attribute]: new TrackAttribute(attribute, name, visible, options, discrete)}};
 const trackAttributesBase = [
@@ -67,17 +67,22 @@ const trackAttributesBase = [
 const TRACK_ATTRIBUTES = Object.fromEntries(trackAttributesBase.map(attr => [attr.attribute, attr]));
 const TRACK_ATTRIBUTES_NAME_MAP = Object.fromEntries(trackAttributesBase.map(attr => [attr.name, attr]));
 
-const BACKGROUND_SRC = require("./shoreline.png");
+const PS_COLORS = {
+	"Stop": "#fffb00",
+	"Skipped Stop": "#ff0000",
+	"null": "#000000",
+}
+const PS_BASE_SIZE = 3;
 
 function SubwayMap({}){
 	const [searchParams, setSearchParams] = useSearchParams();
-	const focusType = searchParams.get("ftype");
-	const focusValue = searchParams.get("fvalue");
-	const attribute = searchParams.get("attribute");
+	const focusType = ["service", "ps"].includes(searchParams.get("ftype")) ? searchParams.get("ftype") : null;
+	const focusValue = focusType && {service: SERVICES, ps: PLATFORM_SETS}[focusType][searchParams.get("fvalue")] ? searchParams.get("fvalue") : null;
+	const attribute = TRACK_ATTRIBUTES[searchParams.get("attribute")] ? searchParams.get("attribute") : null;
 	const select = searchParams.get("select") === "true" || false;
 	const scale = searchParams.get("scale") === "true" || false;
-	const service = searchParams.get("service") === null ? null : parseInt(searchParams.get("service"));
-	const pattern = searchParams.get("pattern") === null ? null : parseInt(searchParams.get("pattern"));
+	const service = searchParams.get("service") !== null && focusType === "service" && focusValue && SERVICES[focusValue][parseInt(searchParams.get("service"))] ? parseInt(searchParams.get("service")) : null;
+	const pattern = searchParams.get("pattern") !== null && focusType === "service" && focusValue && service !== null && SERVICES[focusValue][service].servicePatterns[parseInt(searchParams.get("pattern"))] ? parseInt(searchParams.get("pattern")) : null;
 	const [dimensions, setDimensions] = useState({});
 	const [psHover, setPsHover] = useState(null);
 	const [serviceHover, setServiceHover] = useState(null);
@@ -95,7 +100,7 @@ function SubwayMap({}){
 	if(svgDimensions.x === undefined || svgDimensions.y === undefined){
 		return null;
 	}
-	const highlight = attribute || pattern || patternHover !== null ? {...TRACK_ATTRIBUTES[(pattern || patternHover !== null) ? "service" : attribute], highlightValue} : null;
+	const highlight = attribute || pattern !== null || patternHover !== null ? {...TRACK_ATTRIBUTES[(pattern !== null || patternHover !== null) ? "service" : attribute], highlightValue} : null;
 	const setFocus = (type, doubleclick=false) => {
 		return value => {
 			if(!value || doubleclick && value === focusValue){
@@ -115,8 +120,8 @@ function SubwayMap({}){
 		let extraAttributes = {}
 		const {id, d, ...attributes} = segment;
 		if(pat !== null){
-			const segmentServiceType = SERVICES[focusValue][ser].servicePatterns[pat].route.find(({serviceSegment}) => serviceSegment === attributes.service_segment);
-			extraAttributes = {service: segmentServiceType ? segmentServiceType.type : null};
+			const segmentServiceLabel = SERVICES[focusValue][ser].servicePatterns[pat].route.find(({serviceSegment}) => serviceSegment === attributes.service_segment);
+			extraAttributes = {service: segmentServiceLabel ? segmentServiceLabel.label : null};
 		}
 		return {...attributes, ...extraAttributes};
 	}
@@ -124,10 +129,8 @@ function SubwayMap({}){
 	const stops = {};
 	if(pat !== null){
 		SERVICES[focusValue][ser].servicePatterns[pat].compiledRoute.reduce((obj, serviceStop) => {
-			const {stop, trackNext, trackPrevious} = serviceStop;
-			const stopsNext = trackNext?.stops;
-			const stopsPrevious = trackPrevious?.stops;
-			obj[stop] = [stopsNext, stopsPrevious];
+			const {stop, tracksNext, tracksPrevious} = serviceStop;
+			obj[stop] = [...tracksNext, ...tracksPrevious].some((track) => track.stops);
 			return obj;
 		}, stops)
 	}
@@ -147,7 +150,7 @@ function SubwayMap({}){
 				<image x="0" y="0" width="100%" xlinkHref={BACKGROUND_SRC}></image>
 
 				{Object.values(TRACK_SEGMENTS).filter(segment => segment.visible).map(segment => <TrackSegmentSvg id={segment.id} d={segment.d} attributes={getAttributes(segment)} highlight={highlight} hover={segment.lines.includes(lineHover)} setLineHover={(tr) => setLineHover(tr ? segment.lines[0] : null)}/>)}
-				{Object.entries(PLATFORM_SETS).toSorted((a, b) => b.boardings - a.boardings).map(([identifier, ps]) => (<PlatformSetDot platformSet={ps} scale={scale} stops={stops} setPsHover={(tr) => setPsHover(tr ? identifier : null)} setFocus={() => setFocus("ps", true)(identifier)}/>))}
+				{Object.entries(PLATFORM_SETS).map(([identifier, ps]) => (<PlatformSetDot platformSet={ps} colors={PS_COLORS} baseSize={PS_BASE_SIZE} scale={scale} stops={Object.keys(stops).length > 0 ? stops : null} setPsHover={(tr) => setPsHover(tr ? identifier : null)} setFocus={() => setFocus("ps", true)(identifier)}/>))}
 			</svg>
 			{psHover && (
 				<span style={{position: "absolute", left: PLATFORM_SETS[psHover].coordinates.x, top: PLATFORM_SETS[psHover].coordinates.y + 8, transform: "translate(-50%, 0)"}}>
@@ -217,8 +220,15 @@ function SubwayMap({}){
 					<br/>
 				</span>
 				{highlight && (
-					<span style={{"flex": "4 1 auto"}}>
-						<Legend data={highlight} setHighlightValue={setHighlightValue}/>
+					<span style={{"flex": "0 0 auto"}}>
+						<TrackLegend data={highlight} setHighlightValue={setHighlightValue}/>
+						<br/>
+						<br/>
+					</span>
+				)}
+				{pat !== null && (
+					<span style={{"flex": "0 0 auto"}}>
+						<PlatformSetLegend colors={PS_COLORS} size={PS_BASE_SIZE}/>
 					</span>
 				)}
 			</span>
@@ -226,7 +236,6 @@ function SubwayMap({}){
 				<span style={{"flex": "4 1 auto"}}>
 					{focusType === "ps" && <StationFocus station={STATIONS[PLATFORM_SETS[focusValue].stationKey]} select={select}/>}
 					{focusType === "service" && <ServiceFocus servicesInformation={SERVICES[focusValue]} selected={{service, pattern}} setHover={(service, pattern) => {setServiceHover(service);setPatternHover(pattern);}} setSelect={(ser, pat) => {updateSearchParams(setSearchParams, "service", ser);updateSearchParams(setSearchParams, "pattern", pat);}}/>}
-					{focusType === "line" && true}
 				</span>
 			)}
 		</span>
@@ -264,27 +273,25 @@ function TrackSegmentSvg({id, d, attributes, highlight, hover, setLineHover}){
 };
 
 //TODO could change highlight from string to bool
-function PlatformSetDot({platformSet, scale, stops, setPsHover, setFocus}){
+function PlatformSetDot({platformSet, colors, baseSize, scale, stops, setPsHover, setFocus}){
 	const {name, coordinates: {x, y}} = platformSet;
-	const baseSize = 3;
-	const scaleBaseSize = 1.5;
+	const scaleBaseSize = baseSize/2;
 	const size = scale ? Math.sqrt(STATIONS[platformSet.stationKey].boardings / MIN_BOARDINGS) * scaleBaseSize : baseSize;
-	let fill = "#000000";
-	if(stops[name]){ // TODO directional only stop
-		if(stops[name][0] || stops[name][1]){
-			fill = "#fffb00";
-		} else {
-			fill = "#ff0000";
-		}
+	let fill;
+	if(stops === null || stops[name] == undefined){
+		fill = colors["null"];
+	} else if(stops[name]){ // TODO directional only stop?
+		fill = colors["Stop"];
+	} else { // Skipped stop
+		fill = colors["Skipped Stop"];
 	}
 	return (
-		<ellipse onClick={setFocus} onMouseEnter={() => {setPsHover(true)}} onMouseLeave={() => {setPsHover(false)}} style={{fill, stroke: "stroke: rgb(0, 0, 0)"}} cx={x} cy={y} rx={size} ry={size} transform="matrix(1, 0, 0, 1, 0, -7.105427357601002e-15)"/>
+		<ellipse onClick={setFocus} onMouseEnter={() => {setPsHover(true)}} onMouseLeave={() => {setPsHover(false)}} style={{fill, stroke: "rgb(0, 0, 0)"}} cx={x} cy={y} rx={size} ry={size}/>
 	)
 }
 
-function Legend({data, setHighlightValue}){
+function Legend({name, colors, onTrMouseEnter, onTrMouseLeave, SvgChild}){
 	// TODO could include onClick
-	const {name, colors} = data;
 	return (
 		<>
 			<table style={{"border-spacing": "10px"}}>
@@ -295,11 +302,11 @@ function Legend({data, setHighlightValue}){
 				</thead>
 				<tbody>
 					{Object.entries(colors).filter(([option, _]) => option !== "null").map(([option, color]) => (
-						<tr onMouseEnter={() => {setHighlightValue(option)}} onMouseLeave={() => {setHighlightValue(null)}}>
+						<tr onMouseEnter={() => {onTrMouseEnter(option)}} onMouseLeave={() => {onTrMouseLeave(option)}}>
 							<td>{option}<span style={{display: "inline-block", width: "12px"}}/></td>
 							<td>
-								<svg xmlns="http://www.w3.org/2000/svg" width="30px" height="30px" viewBox="0 0 125 125" style={{display: "inline-block", transform: "translate(0, 50%)"}}>
-									 <line x1="0" y1="0" x2="100" y2="0" stroke={color} strokeWidth="25" />
+								<svg xmlns="http://www.w3.org/2000/svg" width="30px" height="20px" style={{display: "inline-block"}}>
+									 <SvgChild color={color} />
 								</svg>
 							</td>
 						</tr>
@@ -310,6 +317,19 @@ function Legend({data, setHighlightValue}){
 	)
 }
 
+function TrackLegend({data, setHighlightValue}){
+	const {name, colors} = data;
+	return <Legend name={name} colors={colors} onTrMouseEnter={(option) => {setHighlightValue(option)}} onTrMouseLeave={(option) => {setHighlightValue(null)}} SvgChild={({color}) => (
+		<line x1="0" y1="50%" x2="100" y2="50%" stroke={color} strokeWidth="2.5" />
+	)}/>
+}
+
+function PlatformSetLegend({colors, size}){
+	return <Legend name={"Stations"} colors={colors} onTrMouseEnter={(option) => {}} onTrMouseLeave={(option) => {}} SvgChild={({color}) => (
+		<ellipse style={{fill: color, stroke: "rgb(0, 0, 0)"}} rx={size} ry={size} cx="50%" cy="50%"/>
+	)}/>
+}
+
 function ServiceFocus({servicesInformation, selected, setHover, setSelect}){
 	return (
 		<>
@@ -318,6 +338,7 @@ function ServiceFocus({servicesInformation, selected, setHover, setSelect}){
 					{BULLETS[service]()}{" "}{subtitle}<br/>
 					<span style={{"text-indent": "50px"}}>
 						{servicePatterns.map(({serviceDescription}, patternIndex) => {
+							debugger;
 							const isSelected = selected.service === serviceIndex && selected.pattern === patternIndex;
 							const child = (
 								<div onMouseEnter={() => {setHover(serviceIndex, patternIndex)}} onMouseLeave={() => {setHover(null, null)}} onClick={() => {isSelected ? setSelect(null, null) : setSelect(serviceIndex, patternIndex)}}>
@@ -435,7 +456,7 @@ function PlatformSet({platformSet, select}){
 						<>
 							{element.category !== "Platform" && index2 === 0 && <hr style={{"border-top-width": "3px", "border-color": "#888888"}}/>}
 							<div style={{margin: "2px 0px"}}>
-								{element.category === "Track" && <Track track={element} select={select}/>}
+								{element.category === "Track" && <Track track={element} psName={name} select={select}/>}
 								{element.category === "Platform" && <Platform platform={element}/>}
 								{element.category === "Misc" && element.description}
 							</div>
@@ -453,16 +474,16 @@ function PlatformSet({platformSet, select}){
 	);
 }
 
-function Track({track, select}){
-	const {type, direction, compassDirection, stops, service} = track;
+function Track({track, psName, select}){
+	const {label, direction, compassDirection, stops, service} = track;
 	let hasService = false;
 	return (
 		<>
-			<div>{direction === InternalDirection.NEXT ? "\u2190" : "\u2192"}{compassDirection}bound {type}</div>
+			<div>{direction === InternalDirection.NEXT ? "\u2190" : "\u2192"}{compassDirection}bound {label}</div>
 			<div style={{height: "24px", margin: "5px 0px", background: "linear-gradient(to bottom, rgb(255 255 255 / 0%), rgb(255 0 153 / 0%) 4px, #E9E9E9 4px, #E9E9E9 8px, rgb(255 255 255 / 0%) 8px, rgb(255 0 153 / 0%) 16px, #E9E9E9 16px, #E9E9E9 20px, rgb(255 255 255 / 0%) 20px, rgb(255 255 255 / 0%) 24px), repeating-linear-gradient(to right, #FFFFFF, #FFFFFF 12px, #c19a6b 12px, #c19a6b 20px)"}}/>
 			{Object.entries(service).map(([name, serviceTimeStops], index) => {
 				const {serviceTime} = serviceTimeStops;
-				const StopDescription = () => stops ? <NextLastStops serviceTimeStops={serviceTimeStops} select={select}/> : " does not stop here"
+				const StopDescription = () => stops ? <NextLastStops serviceTimeStops={serviceTimeStops} psName={psName} select={select}/> : " does not stop here"
 				if(select){
 					hasService = true;
 					return <div style={{margin: "5px 0px"}}>{BULLETS[name]()}{` ${serviceTimeString(serviceTime, ServiceType.YES)} ${serviceTimeString(serviceTime, ServiceType.SELECT)}`} <StopDescription/></div>;
@@ -481,21 +502,25 @@ function Track({track, select}){
 	);
 }
 
-function NextLastStops({serviceTimeStops, select}){
+function NextLastStops({serviceTimeStops, psName, select}){
 	const {serviceTime, nextStopService, lastStopService} = serviceTimeStops;
-	const getStopRep = (service, select) => {
+	const getStopRep = (service, select, nextstop) => {
 		return (
 			<span /*style={{display: "inline-flex", "flexDirection": "column"}}*/>
 				{Object.entries(service).map(([stop, time], i, serviceTimes) => (
 					<span>
 						{ 
 							(() => {
+								const base = nextstop ? (stop === "\"\"" ? "Termination track" : `Next stop ${stop}`) : `, Last stop ${stop}`;
+								if(!nextstop && stop === psName){
+									return "";
+								}
 								if(select){
 									// TODO consolidate this with above?
 									// TODO eliminate INDIVIDUAL time strings if equal to track service time?
-									return serviceTimes.length > 1 /*&& !serviceTimeEqual(time, serviceTime)*/ ? `${stop} ${serviceTimeString(time, ServiceType.YES)} ${serviceTimeString(time, ServiceType.SELECT)} ` : stop;
+									return base + (serviceTimes.length > 1 /*&& !serviceTimeEqual(time, serviceTime)*/ ? `${serviceTimeString(time, ServiceType.YES)} ${serviceTimeString(time, ServiceType.SELECT)} ` : "");
 								} else {
-									return [time.earlyMorning, time.rushHour, time.midday, time.evening, time.lateNights, time.weekends].some(t => t === ServiceType.YES) ? (serviceTimes.length > 1 && !serviceTimeEqual(time, serviceTime) ? `${stop} ${serviceTimeString(time, ServiceType.YES)} ` : stop) : "";
+									return [time.earlyMorning, time.rushHour, time.midday, time.evening, time.lateNights, time.weekends].some(t => t === ServiceType.YES) ? (serviceTimes.length > 1 && !serviceTimeEqual(time, serviceTime) ? `${base} ${serviceTimeString(time, ServiceType.YES)} ` : base) : "";
 								}
 							})()
 						}
@@ -504,8 +529,8 @@ function NextLastStops({serviceTimeStops, select}){
 			</span>
 		);
 	};
-	// TODO figure out how to handle last stop
-	return (<span>(Next stop {getStopRep(nextStopService, select)}, Last stop {getStopRep(lastStopService, select)})</span>)
+	// TODO fix this once and for all
+	return (<span>({getStopRep(nextStopService, select, true)}{getStopRep(lastStopService, select, false)})</span>)
 }
 
 function Platform({platform}){

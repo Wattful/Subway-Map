@@ -112,16 +112,18 @@ const PlatformService = Enum({
 	BOTH: "Both",
 });
 
-const InternalDirection = Enum({ // TODO might change
+// InternalDirection is an arbitrary way of distinguishing which tracks go in the same and opposite directions.
+// Next corresponds to rail south by default but this can be overridden in SegmentServiceLabel
+const InternalDirection = Enum({
 	NEXT: "Next",
 	PREVIOUS: "Previous",
 	BOTH: "Both",
 });
 
 const ServiceDirection = Enum({
-	NORTH: "North",
-	SOUTH: "South",
-	BOTH: "Both",
+	NORTH: "SNorth",
+	SOUTH: "SSouth",
+	BOTH: "SBoth",
 });
 
 // If service direction is unambiguous, use that. Otherwise, use geographic direction TODO?

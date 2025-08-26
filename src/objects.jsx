@@ -13,7 +13,7 @@ import {
 	ServiceType,
 } from "./enums.jsx";
 
-function Track(line, type, direction, stops){
+function Track(line, type, direction, stops, label=null){
 	this.category = "Track";
 	this.line = line;
 	this.type = type;
@@ -22,6 +22,7 @@ function Track(line, type, direction, stops){
 		throw new Error(`"${stops}" is not a boolean`);
 	}
 	this.stops = stops;
+	this.label = label === null ? type : label;
 	this.service = {}; // Map from service to servicetime
 	this.compassDirection = null;
 }
@@ -36,7 +37,7 @@ function Platform(type, accessible, service){
 	this.service = service;
 }
 
-function PlatformSet(name, type, opened, layout, coordinates){
+function PlatformSet(name, type, opened, layout, coordinates, turnaround=false){
 	this.category = "PlatformSet"; // TODO is this necessary?
 	this.name = name;
 	this.type = type;
@@ -44,9 +45,9 @@ function PlatformSet(name, type, opened, layout, coordinates){
 	// 	throw new Error(`"${opened}" is not a date`)
 	// }
 	this.opened = opened;
-	// TODO verification function?
-	this.layout = layout;
 	this.coordinates = coordinates;
+	this.layout = layout;
+	this.turnaround = turnaround;
 	this.lines = [];
 	this.platformName = null;
 	this.stationKey = null;
@@ -60,10 +61,10 @@ function Station(name, platformSets, boardings, odt){
 	this.rank = null;
 }
 
-function ServiceSegment(name, platformSets, nextDirection, start, end){
+function ServiceSegment(name, platformSets, nextCompassDirection, start, end){
 	this.name = name;
 	this.platformSets = platformSets;
-	this.nextDirection = nextDirection;
+	this.nextCompassDirection = nextCompassDirection;
 	this.start = start;
 	this.end = end;
 }
@@ -106,15 +107,16 @@ function ServiceInformation(service, subtitle, servicePatterns){
 	this.servicePatterns = servicePatterns;
 }
 
-function SegmentServiceType(serviceSegment, type){
+function SegmentServiceLabel(serviceSegment, label, nextDirection=ServiceDirection.SOUTH){
 	this.serviceSegment = serviceSegment;
-	this.type = type;
+	this.label = label;
+	this.nextDirection = nextDirection;
 }
 
-function ServiceStop(stop, trackNext, trackPrevious){
+function ServiceStop(stop, tracksNext, tracksPrevious){
 	this.stop = stop; //Platform set name
-	this.trackNext = trackNext;
-	this.trackPrevious = trackPrevious;
+	this.tracksNext = tracksNext;
+	this.tracksPrevious = tracksPrevious;
 }
 
 function Miscellaneous(description){
@@ -138,7 +140,7 @@ export {
 	accumulateServiceTime,
 	ServicePattern,
 	ServiceInformation,
-	SegmentServiceType,
+	SegmentServiceLabel,
 	ServiceStop,
 	Miscellaneous,
 	categorySearchFunction,
