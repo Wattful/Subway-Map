@@ -30,7 +30,7 @@ forEachCoord(shorelineData.features, minMaxFunction);
 forEachCoord(trackData.features, minMaxFunction);
 forEachCoord(stationsData.features, minMaxFunction);
 
-[xmin, ymin, xmax, ymax] = [xmin - 1000, ymin - 1000, xmax + 1000, ymax + 1000];
+//[xmin, ymin, xmax, ymax] = [xmin - 1000, ymin - 1000, xmax + 1000, ymax + 1000];
 const width = Math.ceil((xmax - xmin) * (height / (ymax - ymin)));
 
 const boundingBoxFeatures = [{"type": "Feature", "properties": {"isboundingbox": true}, "geometry": {"type": "Point", "coordinates": [xmin, ymin]}}, { "type": "Feature", "properties": {"isboundingbox": true}, "geometry": {"type": "Point", "coordinates": [xmax, ymax]}}];
@@ -43,13 +43,15 @@ const pixel_track = filterBoundingBoxFeatures(geoProject(trackInput, d3Geo.geoId
 const stationsInput = {type: "FeatureCollection", features: [...stationsData.features, ...boundingBoxFeatures]};
 const pixel_stations = filterBoundingBoxFeatures(geoProject(stationsInput, d3Geo.geoIdentity().reflectY(true).fitHeight(height, stationsInput)));
 
+// TODO could replace this with argument
+const strokeWidth = height / 1000;
 const shorelineSVG = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
     + "<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">\n"
     + "<svg version=\"1.1\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\""
     + ` width="${width}"`
     + ` height="${height}"`
     + ` viewBox="0 0 ${width} ${height}"`
-    + ` fill="none" stroke="black"`
+    + ` fill="none" stroke="black" stroke-width="${strokeWidth}px"`
     + ">\n"
     + `<path d="${geoPath()(pixel_shoreline)}"/>\n`
     + "</svg>"

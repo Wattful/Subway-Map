@@ -1,4 +1,4 @@
-import React, {useState, useEffect} from "react";
+import React, {useState, useEffect, useMemo, useCallback} from "react";
 import {BrowserRouter, Route, Routes, Link, useSearchParams, useParams} from "react-router-dom";
 import {DateTime, Interval} from "luxon";
 import {SERVICES, STATIONS, PLATFORM_SETS, MIN_BOARDINGS} from "./data.jsx";
@@ -16,11 +16,12 @@ import {
 	Division,
 	SignalingType,
 	JunctionType,
-	BuiltFor
+	BuiltFor,
 } from "./enums.jsx";
 import {serviceTimeEqual} from "./objects.jsx";
 
 // Misc TODO 
+// Add spinner
 // circle/highlight/border station dots
 // Better representation of scaled stations
 // Bullet ordering
@@ -29,16 +30,39 @@ import {serviceTimeEqual} from "./objects.jsx";
 // Multiple values for track attributes (QBL/astoria overlap)
 // Add ability to generate larger image and scale down
 
-function Subway({}){
-	return (
-		<BrowserRouter>
-			<Routes>
-				<Route path="/*" element={<SubwayMap />} />
-				<Route path="/" element={<SubwayMap />} />
-			</Routes>
-		</BrowserRouter>
-	);
+
+// https://stackoverflow.com/questions/36862334/get-viewport-window-height-in-reactjs
+const useWindowDimensions = () => {
+	const [windowDimensions, setWindowDimensions] = useState({x: window.innerWidth, y: window.innerHeight});
+	useEffect(() => {
+		function handleResize() {
+			setWindowDimensions({x: window.innerWidth, y: window.innerHeight});
+		}
+
+		window.addEventListener('resize', handleResize);
+		return () => {
+			window.removeEventListener('resize', handleResize);
+		}
+	}, []);
+	return windowDimensions;
 }
+
+
+// https://www.joshwcomeau.com/snippets/react-hooks/use-mouse-position/
+const useMousePosition = () => {
+	const [mousePosition, setMousePosition] = React.useState({x: null, y: null});
+	useEffect(() => {
+		const updateMousePosition = ev => {
+			setMousePosition({x: ev.clientX, y: ev.clientY});
+		};
+
+		window.addEventListener('mousemove', updateMousePosition);
+		return () => {
+			window.removeEventListener('mousemove', updateMousePosition);
+		};
+	}, []);
+	return mousePosition;
+};
 
 const BACKGROUND_SRC = require("./shoreline.png");
 
@@ -72,9 +96,22 @@ const PS_COLORS = {
 	"Skipped Stop": "#ff0000",
 	"null": "#000000",
 }
-const PS_BASE_SIZE = 3;
+
+
+function Subway({}){
+	return (
+		<BrowserRouter>
+			<Routes>
+				<Route path="/*" element={<SubwayMap />} />
+				<Route path="/" element={<SubwayMap />} />
+			</Routes>
+		</BrowserRouter>
+	);
+}
+
 
 function SubwayMap({}){
+	// TODO wrap all non-hooks in useMemo?
 	const [searchParams, setSearchParams] = useSearchParams();
 	const focusType = ["service", "ps"].includes(searchParams.get("ftype")) ? searchParams.get("ftype") : null;
 	const focusValue = focusType && {service: SERVICES, ps: PLATFORM_SETS}[focusType][searchParams.get("fvalue")] ? searchParams.get("fvalue") : null;
@@ -83,13 +120,83 @@ function SubwayMap({}){
 	const scale = searchParams.get("scale") === "true" || false;
 	const service = searchParams.get("service") !== null && focusType === "service" && focusValue && SERVICES[focusValue][parseInt(searchParams.get("service"))] ? parseInt(searchParams.get("service")) : null;
 	const pattern = searchParams.get("pattern") !== null && focusType === "service" && focusValue && service !== null && SERVICES[focusValue][service].servicePatterns[parseInt(searchParams.get("pattern"))] ? parseInt(searchParams.get("pattern")) : null;
-	const [dimensions, setDimensions] = useState({});
 	const [psHover, setPsHover] = useState(null);
 	const [serviceHover, setServiceHover] = useState(null);
 	const [patternHover, setPatternHover] = useState(null);
 	const [lineHover, setLineHover] = useState(null);
 	const [highlightValue, setHighlightValue] = useState(null);
-	const [svgDimensions, setSvgDimensions] = useState({});
+	const [svgDimensions, setSvgDimensions] = useState(null);
+	const windowDimensions = useWindowDimensions();
+	const mousePosition = useMousePosition();
+	const [baseTranslate, setBaseTranslate] = useState(null);
+	const [startDragPosition, setStartDragPosition] = useState(null);
+	const translate = useMemo(() => startDragPosition ? {
+		x: baseTranslate.x + mousePosition.x - startDragPosition.x, 
+		y: baseTranslate.y + mousePosition.y - startDragPosition.y,
+	} : {
+		...baseTranslate
+	}, [mousePosition, baseTranslate, startDragPosition]);
+	// The background image is high resolution and scaled down using a "base zoom" value (unless you have an extremely high res monitor, in which case it's scaled up)
+	const baseZoom = useMemo(() => svgDimensions === null ? null : Math.min(windowDimensions.x / svgDimensions.x, windowDimensions.y / svgDimensions.y), [svgDimensions, windowDimensions])
+	const [zoom, setZoom] = useState(null);
+	const reset = useCallback(() => {
+		setZoom(baseZoom);
+		setBaseTranslate({x: (1 - baseZoom) * svgDimensions.x/2, y: (1 - baseZoom) * svgDimensions.y/2});
+	}, [baseZoom, svgDimensions]);
+	useEffect(() => {
+		if(baseZoom !== null && zoom === null){
+			reset();
+		}
+	}, [baseZoom, zoom]);
+
+	// Absolute position of 0, 0 in the SVG coordinate system if SVG is unzoomed and unpanned
+	// TODO "calculate for x and y function" to simplify code?
+	const initialOrigin = useMemo(() => {
+		return svgDimensions === null ? null : {
+			x: windowDimensions.x/2 - svgDimensions.x/2,
+			y: windowDimensions.y/2 - svgDimensions.y/2,
+		}
+	}, [svgDimensions, windowDimensions])
+	const absoluteCoordsToSvgCoords = useCallback((coords) => {
+		return {
+			x: (coords.x - initialOrigin.x - baseTranslate.x) / zoom,
+			y: (coords.y - initialOrigin.y - baseTranslate.y) / zoom,
+		}
+	}, [initialOrigin, baseTranslate, zoom]);
+	const svgCoordsToAbsoluteCoords = useCallback((coords) => {
+		return {
+			x: (coords.x * zoom) + initialOrigin.x + baseTranslate.x,
+			y: (coords.y * zoom) + initialOrigin.y + baseTranslate.y,
+		}
+	}, [initialOrigin, baseTranslate, zoom]);
+
+	const updateZoom = useCallback((delta, ignoreMouse) => {
+		if(startDragPosition){
+			return;
+		}
+		const multiplier = delta < 0 ? 0.8 : 1.25;
+		const newZoom = multiplier * zoom;
+		if((newZoom < 0.75 * baseZoom && multiplier < 1) || (newZoom > 10 * baseZoom && multiplier > 1)){
+			return;
+		}
+		const zoomTarget = ignoreMouse ? {x: windowDimensions.x/2, y: windowDimensions.y/2} : mousePosition;
+		// Target position within the SVG's coordinate system, should remain constant after scrolling.
+		const targetPositionOverSvg = absoluteCoordsToSvgCoords(zoomTarget);
+		setZoom(newZoom);
+		// Assume that targetPositionOverSvg is constant then solve the equation for baseTranslate subsituting in the new zoom value
+		setBaseTranslate({
+			x: zoomTarget.x - initialOrigin.x - (targetPositionOverSvg.x * newZoom), 
+			y: zoomTarget.y - initialOrigin.y - (targetPositionOverSvg.y * newZoom),
+		});
+	}, [absoluteCoordsToSvgCoords, windowDimensions, mousePosition, startDragPosition, baseZoom, zoom]);
+	useEffect(() => {
+		const onScroll = (e) => updateZoom(-e.deltaY, false);
+		window.addEventListener('wheel', onScroll);
+		return () => {
+			window.removeEventListener('wheel', onScroll);
+		};
+	}, [updateZoom]);
+
 	useEffect(() => {
 		const img = new Image();
 		img.onload = () => {
@@ -97,9 +204,10 @@ function SubwayMap({}){
 		}
 		img.src = BACKGROUND_SRC;
 	}, []);
-	if(svgDimensions.x === undefined || svgDimensions.y === undefined){
+	if(svgDimensions === null || zoom === null){
 		return null;
 	}
+
 	const highlight = attribute || pattern !== null || patternHover !== null ? {...TRACK_ATTRIBUTES[(pattern !== null || patternHover !== null) ? "service" : attribute], highlightValue} : null;
 	const setFocus = (type, doubleclick=false) => {
 		return value => {
@@ -136,7 +244,7 @@ function SubwayMap({}){
 	}
 
 	return (
-		<span style={{"display": "flex", "flex": "1 1 auto", position: "relative"}}>
+		<span style={{display: "flex", "flex-direction": "column", overflow: "hidden", height: "100vh", "align-items": "center", "justify-content": "center"}}>
 			<svg
 				xmlns="http://www.w3.org/2000/svg"
 				xmlnsXlink="http://www.w3.org/1999/xlink"
@@ -144,28 +252,46 @@ function SubwayMap({}){
 				id="svg2"
 				height={svgDimensions.y}
 				width={svgDimensions.x}
+				viewBox={`0 0 ${svgDimensions.x} ${svgDimensions.y}`}
 				version="1.1"
-				style={{"flex": "0 0 auto", "z-index": "0"}}
+				onMouseDown={() => {setStartDragPosition({...mousePosition})}}
+				onMouseUp={() => {
+					setBaseTranslate({...translate});
+					setStartDragPosition(null);
+				}}
+				style={{cursor: startDragPosition ? "grabbing" : "grab", width: "100vw", height: "100vh", "min-width": `${svgDimensions.x}px`, "min-height": `${svgDimensions.y}px`}}
+				/*style={{"flex": "0 0 auto", "z-index": "0"}}*/
 			>
-				<image x="0" y="0" width="100%" xlinkHref={BACKGROUND_SRC}></image>
+				<g transform={`matrix(${zoom} 0 0 ${zoom} ${translate.x} ${translate.y})`}>
+					<image x="0" y="0" width="100%" xlinkHref={BACKGROUND_SRC}></image>
 
-				{Object.values(TRACK_SEGMENTS).filter(segment => segment.visible).map(segment => <TrackSegmentSvg id={segment.id} d={segment.d} attributes={getAttributes(segment)} highlight={highlight} hover={segment.lines.includes(lineHover)} setLineHover={(tr) => setLineHover(tr ? segment.lines[0] : null)}/>)}
-				{Object.entries(PLATFORM_SETS).map(([identifier, ps]) => (<PlatformSetDot platformSet={ps} colors={PS_COLORS} baseSize={PS_BASE_SIZE} scale={scale} stops={Object.keys(stops).length > 0 ? stops : null} setPsHover={(tr) => setPsHover(tr ? identifier : null)} setFocus={() => setFocus("ps", true)(identifier)}/>))}
+					{Object.values(TRACK_SEGMENTS).filter(segment => segment.visible).map(segment => <TrackSegmentSvg id={segment.id} d={segment.d} baseWidth={svgDimensions.y/275} attributes={getAttributes(segment)} highlight={highlight} hover={segment.lines.includes(lineHover)} setLineHover={(tr) => setLineHover(tr ? segment.lines[0] : null)}/>)}
+					{Object.entries(PLATFORM_SETS).map(([identifier, ps]) => (<PlatformSetDot platformSet={ps} colors={PS_COLORS} baseSize={svgDimensions.y/275} scale={scale} stops={Object.keys(stops).length > 0 ? stops : null} setPsHover={(tr) => setPsHover(tr ? identifier : null)} setFocus={() => setFocus("ps", true)(identifier)}/>))}
+				</g>
 			</svg>
-			{psHover && (
-				<span style={{position: "absolute", left: PLATFORM_SETS[psHover].coordinates.x, top: PLATFORM_SETS[psHover].coordinates.y + 8, transform: "translate(-50%, 0)"}}>
-					<PlatformSetPreview platformSet={PLATFORM_SETS[psHover]} select={select}/>
-				</span>
-			)}
-			{/* TODO could do mouse position, also could do hardcoded location for each line*/}
+			{psHover && (() => {
+				const {x, y} = svgCoordsToAbsoluteCoords(PLATFORM_SETS[psHover].coordinates);
+				return (
+					<span style={{position: "absolute", left: x, top: y, transform: "translate(-50%, 10%)"}}>
+						<PlatformSetPreview platformSet={PLATFORM_SETS[psHover]} select={select}/>
+					</span>
+				)
+			})()}
+			{/* TODO save mouse position when start hovering then don't move*/}
 			{lineHover && (
-				//<span style={{position: "absolute", left: mousePosition.x, top: mousePosition.y + 8, transform: "translate(-50%, 0)"}}>
-				<span style={{position: "absolute", left: 0, top: 0}}>
+				//<span style={{position: "absolute", left: 0, top: 0}}>
+				<span style={{position: "absolute", left: mousePosition.x, top: mousePosition.y, transform: "translate(-50%, 10%)"}}>
 					<LinePreview line={lineHover} select={select}/>
 				</span>
 			)}
-			<span style={{"flex": "0 0 auto", "display": "flex", "flexDirection": "column", margin: "0px 80px 0px 25px"}}>
-				<span style={{"flex": "0 0 auto"}}>
+			<span style={{position: "absolute", top: "0px", left: "0px"}} /*style={{"flex": "0 0 auto", "display": "flex", "flexDirection": "column", margin: "0px 80px 0px 25px"}}*/>
+				<span>
+					<span>
+						<button style={{border: "0.5px solid", padding: "0 8px", "margin-right": "8px"}} onClick={() => updateZoom(1, true)}>+</button>
+						<button style={{border: "0.5px solid", padding: "0 8px", "margin-right": "8px"}} onClick={reset}>Reset</button>
+						<button style={{border: "0.5px solid", padding: "0 8px"}} onClick={() => updateZoom(-1, true)}>-</button>
+					</span>
+					<br/>
 					<label style={{"margin-right": "8px"}}>Show Select Service?</label>
 					<input type="checkbox" checked={select} onClick={() => {updateSearchParams(setSearchParams, "select", !select)}} />
 					<br/>
@@ -228,12 +354,12 @@ function SubwayMap({}){
 				)}
 				{pat !== null && (
 					<span style={{"flex": "0 0 auto"}}>
-						<PlatformSetLegend colors={PS_COLORS} size={PS_BASE_SIZE}/>
+						<PlatformSetLegend colors={PS_COLORS} size={3.5}/>
 					</span>
 				)}
 			</span>
 			{focusValue && (
-				<span style={{"flex": "4 1 auto"}}>
+				<span style={{position: "absolute", top: "0px", right: "0px", "background-color": "#FFFFFF"}} /*style={{"flex": "4 1 auto"}}*/>
 					{focusType === "ps" && <StationFocus station={STATIONS[PLATFORM_SETS[focusValue].stationKey]} select={select}/>}
 					{focusType === "service" && <ServiceFocus servicesInformation={SERVICES[focusValue]} selected={{service, pattern}} setHover={(service, pattern) => {setServiceHover(service);setPatternHover(pattern);}} setSelect={(ser, pat) => {updateSearchParams(setSearchParams, "service", ser);updateSearchParams(setSearchParams, "pattern", pat);}}/>}
 				</span>
@@ -242,13 +368,13 @@ function SubwayMap({}){
 	);
 }
 
-function TrackSegmentSvg({id, d, attributes, highlight, hover, setLineHover}){
+function TrackSegmentSvg({id, d, baseWidth, attributes, highlight, hover, setLineHover}){
     const {stroke, opacity} = highlight ? highlight.getColor(attributes[highlight.attribute]) : {stroke: "#9c9c9c", opacity: "1"};
     if(stroke === undefined){
         throw new Error(`Track segment ${id} has no attribute ${highlight.attribute} or highlight has no value ${attributes[highlight.attribute]}`);
     }
-    const shadowSize = "0.5px";
-    const shadowColor = "#555555";
+    // const shadowSize = "0.5px";
+    // const shadowColor = "#555555";
     // TODO bring to front if using shadow? Overall I'm a bit dissatisfied with this
     const useShadow =  hover || (highlight && (attributes[highlight.attribute] !== null && highlight.getColor(highlight.highlightValue).stroke === highlight.getColor(attributes[highlight.attribute]).stroke))
     //const style = useShadow ? {filter: `drop-shadow(-${shadowSize} -${shadowSize} ${shadowColor}) drop-shadow(${shadowSize} -${shadowSize} ${shadowColor}) drop-shadow(${shadowSize} ${shadowSize} ${shadowColor}) drop-shadow(-${shadowSize} ${shadowSize} ${shadowColor})`} : {}
@@ -262,13 +388,15 @@ function TrackSegmentSvg({id, d, attributes, highlight, hover, setLineHover}){
             strokeLinecap="round"
             strokeLinejoin="round"
             strokeMiterlimit="10"
-            strokeWidth={useShadow ? "5.5" : "2.5"}
+            strokeWidth={useShadow ? baseWidth * 2 : baseWidth}
             //style={style}
+            style={{cursor: "default"}}
             d={d}
             clipPath="url(#SVGID_548_)"
+            onMouseDown={(e) => {e.stopPropagation()}}
             onMouseEnter={() => {setLineHover(true)}}
             onMouseLeave={() => {setLineHover(false)}}
-        ></path>
+        />
     )
 };
 
@@ -286,7 +414,17 @@ function PlatformSetDot({platformSet, colors, baseSize, scale, stops, setPsHover
 		fill = colors["Skipped Stop"];
 	}
 	return (
-		<ellipse onClick={setFocus} onMouseEnter={() => {setPsHover(true)}} onMouseLeave={() => {setPsHover(false)}} style={{fill, stroke: "rgb(0, 0, 0)"}} cx={x} cy={y} rx={size} ry={size}/>
+		<ellipse
+			cx={x} 
+			cy={y} 
+			rx={size} 
+			ry={size}
+			style={{fill, cursor: "default", stroke: "rgb(0, 0, 0)"}} 
+			onClick={setFocus}
+			onMouseDown={(e) => {e.stopPropagation()}}
+			onMouseEnter={() => {setPsHover(true)}} 
+			onMouseLeave={() => {setPsHover(false)}} 
+		/>
 	)
 }
 
@@ -397,7 +535,7 @@ function StationFocus({station, select}){
 	);
 }
 
-// TODO change name to platformset?
+// TODO change name to platformset, add "pointer triangle"?
 function PlatformSetPreview({platformSet, select}){
 	const {name, type, odt, layout, platformName} = platformSet;
 	const bullets = getBullets([platformSet], select);
