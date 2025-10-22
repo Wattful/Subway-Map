@@ -13,7 +13,7 @@ import {
 	ServiceType,
 } from "./enums.jsx";
 
-function Track(line, type, direction, stops, label=null){
+function Track(line, type, direction, stops, disambiguator=null){
 	this.category = "Track";
 	this.line = line;
 	this.type = type;
@@ -22,7 +22,7 @@ function Track(line, type, direction, stops, label=null){
 		throw new Error(`"${stops}" is not a boolean`);
 	}
 	this.stops = stops;
-	this.label = label === null ? type : label;
+	this.disambiguator = disambiguator;
 	this.service = {}; // Map from service to servicetime
 	this.compassDirection = null;
 }
@@ -37,7 +37,7 @@ function Platform(type, accessible, service){
 	this.service = service;
 }
 
-function PlatformSet(name, type, opened, layout, coordinates, turnaround=false){
+function PlatformSet(name, type, opened, coordinates, turnaround=false){
 	this.category = "PlatformSet"; // TODO is this necessary?
 	this.name = name;
 	this.type = type;
@@ -46,19 +46,31 @@ function PlatformSet(name, type, opened, layout, coordinates, turnaround=false){
 	// }
 	this.opened = opened;
 	this.coordinates = coordinates;
-	this.layout = layout;
 	this.turnaround = turnaround;
 	this.lines = [];
 	this.platformName = null;
 	this.stationKey = null;
+	this.tab = null;
 }
 
-function Station(name, platformSets, boardings, odt){
+function Station(name, tabs, platformSets, boardings, odt){
 	this.name = name;
+	this.tabs = tabs;
 	this.platformSets = platformSets;
 	this.boardings = boardings;
 	this.odt = odt;
 	this.rank = null;
+}
+
+function Tab(layout, psName, normal=true){
+	this.layout = layout;
+	this.psName = psName;
+	this.normal = normal;
+}
+
+function Label(data){
+	this.category = "Label";
+	Object.assign(this, data);
 }
 
 function ServiceSegment(name, platformSets, nextCompassDirection, start, end){
@@ -107,10 +119,12 @@ function ServiceInformation(service, subtitle, servicePatterns){
 	this.servicePatterns = servicePatterns;
 }
 
-function SegmentServiceLabel(serviceSegment, label, nextDirection=ServiceDirection.SOUTH){
+function SegmentServiceLabel(serviceSegment, type, line, nextDirection=ServiceDirection.SOUTH, disambiguator=null){
 	this.serviceSegment = serviceSegment;
-	this.label = label;
+	this.type = type;
+	this.line = line;
 	this.nextDirection = nextDirection;
+	this.disambiguator = disambiguator;
 }
 
 function ServiceStop(stop, tracksNext, tracksPrevious){
@@ -133,6 +147,8 @@ export {
 	Platform,
 	PlatformSet,
 	Station,
+	Tab,
+	Label,
 	ServiceSegment,
 	ServiceTime,
 	serviceTimeEqual,

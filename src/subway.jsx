@@ -94,7 +94,7 @@ const TRACK_ATTRIBUTES_NAME_MAP = Object.fromEntries(trackAttributesBase.map(att
 const PS_COLORS = {
 	"Stop": "#fffb00",
 	"Skipped Stop": "#ff0000",
-	"null": "#000000",
+	"null": "#ffffff",
 }
 
 
@@ -120,6 +120,7 @@ function SubwayMap({}){
 	const scale = searchParams.get("scale") === "true" || false;
 	const service = searchParams.get("service") !== null && focusType === "service" && focusValue && SERVICES[focusValue][parseInt(searchParams.get("service"))] ? parseInt(searchParams.get("service")) : null;
 	const pattern = searchParams.get("pattern") !== null && focusType === "service" && focusValue && service !== null && SERVICES[focusValue][service].servicePatterns[parseInt(searchParams.get("pattern"))] ? parseInt(searchParams.get("pattern")) : null;
+	const tab = searchParams.get("tab") !== null ? parseInt(searchParams.get("tab")) : null; // TODO extra validation
 	const [psHover, setPsHover] = useState(null);
 	const [serviceHover, setServiceHover] = useState(null);
 	const [patternHover, setPatternHover] = useState(null);
@@ -191,6 +192,7 @@ function SubwayMap({}){
 	}, [absoluteCoordsToSvgCoords, windowDimensions, mousePosition, startDragPosition, baseZoom, zoom]);
 	useEffect(() => {
 		const onScroll = (e) => updateZoom(-e.deltaY, false);
+		// TODO this shouldn't be global
 		window.addEventListener('wheel', onScroll);
 		return () => {
 			window.removeEventListener('wheel', onScroll);
@@ -214,9 +216,11 @@ function SubwayMap({}){
 			if(!value || doubleclick && value === focusValue){
 				updateSearchParams(setSearchParams, "ftype", null);
 				updateSearchParams(setSearchParams, "fvalue", null);
+				return true;
 			} else {
 				updateSearchParams(setSearchParams, "ftype", type);
 				updateSearchParams(setSearchParams, "fvalue", value);
+				return false;
 			}
 		}
 	}
@@ -229,7 +233,7 @@ function SubwayMap({}){
 		const {id, d, ...attributes} = segment;
 		if(pat !== null){
 			const segmentServiceLabel = SERVICES[focusValue][ser].servicePatterns[pat].route.find(({serviceSegment}) => serviceSegment === attributes.service_segment);
-			extraAttributes = {service: segmentServiceLabel ? segmentServiceLabel.label : null};
+			extraAttributes = {service: segmentServiceLabel ? segmentServiceLabel.type : null};
 		}
 		return {...attributes, ...extraAttributes};
 	}
@@ -265,15 +269,47 @@ function SubwayMap({}){
 				<g transform={`matrix(${zoom} 0 0 ${zoom} ${translate.x} ${translate.y})`}>
 					<image x="0" y="0" width="100%" xlinkHref={BACKGROUND_SRC}></image>
 
-					{Object.values(TRACK_SEGMENTS).filter(segment => segment.visible).map(segment => <TrackSegmentSvg id={segment.id} d={segment.d} baseWidth={svgDimensions.y/275} attributes={getAttributes(segment)} highlight={highlight} hover={segment.lines.includes(lineHover)} setLineHover={(tr) => setLineHover(tr ? segment.lines[0] : null)}/>)}
-					{Object.entries(PLATFORM_SETS).map(([identifier, ps]) => (<PlatformSetDot platformSet={ps} colors={PS_COLORS} baseSize={svgDimensions.y/275} scale={scale} stops={Object.keys(stops).length > 0 ? stops : null} setPsHover={(tr) => setPsHover(tr ? identifier : null)} setFocus={() => setFocus("ps", true)(identifier)}/>))}
+					{Object.values(TRACK_SEGMENTS).filter(segment => segment.visible).map(segment => (
+						<TrackSegmentSvg 
+							id={segment.id} 
+							d={segment.d} 
+							baseWidth={svgDimensions.y/275} 
+							attributes={getAttributes(segment)} 
+							highlight={highlight} 
+							hover={segment.lines.includes(lineHover)} 
+							setLineHover={(tr) => setLineHover(tr ? segment.lines[0] : null)}
+						/>
+					))}
+					{Object.entries(PLATFORM_SETS).map(([identifier, ps]) => (
+						<PlatformSetDot 
+							platformSet={ps} 
+							colors={PS_COLORS} 
+							baseSize={svgDimensions.y/275} 
+							scale={scale} 
+							stops={Object.keys(stops).length > 0 ? stops : null} 
+							setPsHover={(tr) => setPsHover(tr ? identifier : null)}
+							setFocus={() => {
+								const doubleclick = setFocus("ps", true)(identifier);
+								updateSearchParams(setSearchParams, "tab", doubleclick ? null : ps.tab);
+							}}
+						/>
+					))}
 				</g>
 			</svg>
 			{psHover && (() => {
 				const {x, y} = svgCoordsToAbsoluteCoords(PLATFORM_SETS[psHover].coordinates);
 				return (
-					<span style={{position: "absolute", left: x, top: y, transform: "translate(-50%, 10%)"}}>
-						<PlatformSetPreview platformSet={PLATFORM_SETS[psHover]} select={select}/>
+					// TODO scale translation when station dots are scaled
+					<span style={{position: "absolute", left: x, top: y, transform: `translate(-50%, ${zoom*20}px)`}}>
+						<PlatformSetPreview 
+							platformSet={PLATFORM_SETS[psHover]} 
+							select={select}
+							setPsHover={(tr) => setPsHover(tr ? psHover : null)}
+							setFocus={() => {
+								const doubleclick = setFocus("ps", true)(identifier);
+								updateSearchParams(setSearchParams, "tab", doubleclick ? null : ps.tab);
+							}}
+						/>
 					</span>
 				)
 			})()}
@@ -326,6 +362,7 @@ function SubwayMap({}){
 					<label style={{"margin-right": "8px"}}>Service</label>
 					<select onChange={(event) => {
 						if(event.target.value === "None"){
+							// TODO use setFocus here?
 							updateSearchParams(setSearchParams, "ftype", null);
 							updateSearchParams(setSearchParams, "fvalue", null);
 							updateSearchParams(setSearchParams, "service", null);
@@ -359,9 +396,29 @@ function SubwayMap({}){
 				)}
 			</span>
 			{focusValue && (
-				<span style={{position: "absolute", top: "0px", right: "0px", "background-color": "#FFFFFF"}} /*style={{"flex": "4 1 auto"}}*/>
-					{focusType === "ps" && <StationFocus station={STATIONS[PLATFORM_SETS[focusValue].stationKey]} select={select}/>}
-					{focusType === "service" && <ServiceFocus servicesInformation={SERVICES[focusValue]} selected={{service, pattern}} setHover={(service, pattern) => {setServiceHover(service);setPatternHover(pattern);}} setSelect={(ser, pat) => {updateSearchParams(setSearchParams, "service", ser);updateSearchParams(setSearchParams, "pattern", pat);}}/>}
+				<span style={{position: "absolute", "overflow-y": "scroll", top: "0px", right: "0px", "background-color": "#FFFFFF"}} /*style={{"flex": "4 1 auto"}}*/>
+					{focusType === "ps" && 
+						<StationFocus 
+							station={STATIONS[PLATFORM_SETS[focusValue].stationKey]} 
+							tab={tab} 
+							setTab={(tab) => updateSearchParams(setSearchParams, "tab", tab)}
+							select={select}
+						/>
+					}
+					{focusType === "service" && 
+						<ServiceFocus 
+							servicesInformation={SERVICES[focusValue]} 
+							selected={{service, pattern}} 
+							setHover={(service, pattern) => {
+								setServiceHover(service);
+								setPatternHover(pattern);
+							}} 
+							setSelect={(ser, pat) => {
+								updateSearchParams(setSearchParams, "service", ser);
+								updateSearchParams(setSearchParams, "pattern", pat);
+							}}
+						/>
+					}
 				</span>
 			)}
 		</span>
@@ -476,7 +533,6 @@ function ServiceFocus({servicesInformation, selected, setHover, setSelect}){
 					{BULLETS[service]()}{" "}{subtitle}<br/>
 					<span style={{"text-indent": "50px"}}>
 						{servicePatterns.map(({serviceDescription}, patternIndex) => {
-							debugger;
 							const isSelected = selected.service === serviceIndex && selected.pattern === patternIndex;
 							const child = (
 								<div onMouseEnter={() => {setHover(serviceIndex, patternIndex)}} onMouseLeave={() => {setHover(null, null)}} onClick={() => {isSelected ? setSelect(null, null) : setSelect(serviceIndex, patternIndex)}}>
@@ -493,8 +549,10 @@ function ServiceFocus({servicesInformation, selected, setHover, setSelect}){
 	);
 }
 
-function StationFocus({station, select}){
-	const {name, platformSets, boardings, odt, rank} = station;
+// TODO Fix scrolling in station window (use CSS "float" property instead of flex?)
+function StationFocus({station, tab, setTab, select}){
+	const {name, platformSets, tabs, boardings, odt, rank} = station;
+	const renderedTab = (tab === undefined || tab === null || tab > station.tabs.length - 1) ? 0 : tab;
 	const ordinal = num => {
 		if(num % 10 === 1 && num % 100 !== 11){
 			return `${num}st`;
@@ -508,16 +566,14 @@ function StationFocus({station, select}){
 	};
 	const bullets = new Set();
 	for(const platformSet of platformSets){
-		for(const floor of platformSet.layout){
-			for(const element of floor){
-				if(element.category !== "Track" || !element.stops){
-					continue;
-				}
-				for(const [service, {serviceTime}] of Object.entries(element.service)){
-					// TODO order, MAKE THIS A SEPARATE FUNCTION NOTE: late nights omitted on purpose
-					if(select || [serviceTime.earlyMorning, serviceTime.rushHour, serviceTime.midday, serviceTime.evening, serviceTime.weekends].some(t => t === ServiceType.YES)){
-						bullets.add(service);
-					}
+		for(const track of platformSet.tracks){
+			if(!track.stops){
+				continue;
+			}
+			for(const [service, {serviceTime}] of Object.entries(track.service)){
+				// TODO order, MAKE THIS A SEPARATE FUNCTION NOTE: late nights omitted on purpose
+				if(select || [serviceTime.earlyMorning, serviceTime.rushHour, serviceTime.midday, serviceTime.evening, serviceTime.weekends].some(t => t === ServiceType.YES)){
+					bullets.add(service);
 				}
 			}
 		}
@@ -530,17 +586,39 @@ function StationFocus({station, select}){
 			</div>
 			{boardings.toLocaleString()} boardings (2023), {ordinal(rank)} of {Object.values(STATIONS).length}<br/>
 			Opposite direction transfer: {{true: "Yes", false: "No", null: "N/A"}[odt]}<br/><br/>
-			{platformSets.map((platformSet => <PlatformSet platformSet={platformSet} select={select}/>))}<br/>
+			{/*TODO tab titles*/}
+			{tabs.length === 1 ? (
+					<Tab tab={tabs[renderedTab]} select={select}/>
+				) : (
+					<>
+						{tabs.map((tab, index) => 
+							<span 
+								style={{padding: "10px", "font-weight": index === renderedTab ? "bold" : "normal"}} 
+								onClick={() => setTab(index)}>{PLATFORM_SETS[tab.psName].lines.map(lineName => lineName.slice(lineName.indexOf(" "))).join(", ")}
+							</span>
+						)}
+						<br/>
+						<Tab tab={tabs[renderedTab]} select={select}/>
+					</>
+				)
+			}
+			<br/>
 		</>
 	);
 }
 
 // TODO change name to platformset, add "pointer triangle"?
-function PlatformSetPreview({platformSet, select}){
+function PlatformSetPreview({platformSet, select, setPsHover, setFocus}){
 	const {name, type, odt, layout, platformName} = platformSet;
 	const bullets = getBullets([platformSet], select);
 	return (
-		<div style={{"background-color": "#000000", "color": "#FFFFFF", "font-family": "Helvetica", "font-weight": "bold", "border-top": "10px solid black", "box-shadow": "inset 0 2px white", "padding": "2px 10px"}}>
+		<div 
+			style={{"background-color": "#000000", "color": "#FFFFFF", "font-family": "Helvetica", "font-weight": "bold", "border-top": "10px solid black", "box-shadow": "inset 0 2px white", "padding": "2px 10px"}}
+			onClick={setFocus}
+			onMouseDown={(e) => {e.stopPropagation()}}
+			onMouseEnter={() => {setPsHover(true)}} 
+			onMouseLeave={() => {setPsHover(false)}} 
+		>
 			{name}<br/>
 			{Array.from(bullets).toSorted().map(bullet => (BULLETS[bullet]()))}
 		</div>
@@ -548,8 +626,7 @@ function PlatformSetPreview({platformSet, select}){
 }
 
 function LinePreview({line, select}){
-	// TODO this is part of the "station overhaul"
-	const platformSets = Object.values(PLATFORM_SETS).filter(ps => ps.layout.flat().map(el => el.line).includes(line));
+	const platformSets = Object.values(PLATFORM_SETS).filter(ps => ps.tracks.map(el => el.line).includes(line));
 	const bullets = getBullets(platformSets, select);
 	return (
 		<div style={{"background-color": "#000000", "color": "#FFFFFF", "font-family": "Helvetica", "font-weight": "bold", "border-top": "10px solid black", "box-shadow": "inset 0 2px white", "padding": "2px 10px"}}>
@@ -562,17 +639,14 @@ function LinePreview({line, select}){
 function getBullets(platformSets, select){
 	const bullets = new Set();
 	for(const platformSet of platformSets){
-		const {layout} = platformSet;
-		for(const floor of layout){
-			for(const element of floor){
-				if(element.category !== "Track" || !element.stops){
-					continue;
-				}
-				for(const [service, {serviceTime}] of Object.entries(element.service)){
-					// TODO order, MAKE THIS A SEPARATE FUNCTION NOTE: late nights omitted on purpose
-					if(select || [serviceTime.earlyMorning, serviceTime.rushHour, serviceTime.midday, serviceTime.evening, serviceTime.weekends].some(t => t === ServiceType.YES)){
-						bullets.add(service);
-					}
+		for(const track of platformSet.tracks){
+			if(!track.stops){
+				continue;
+			}
+			for(const [service, {serviceTime}] of Object.entries(track.service)){
+				// TODO order, MAKE THIS A SEPARATE FUNCTION NOTE: late nights omitted on purpose
+				if(select || [serviceTime.earlyMorning, serviceTime.rushHour, serviceTime.midday, serviceTime.evening, serviceTime.weekends].some(t => t === ServiceType.YES)){
+					bullets.add(service);
 				}
 			}
 		}
@@ -581,12 +655,13 @@ function getBullets(platformSets, select){
 	return bullets;
 }
 
-function PlatformSet({platformSet, select}){
-	const {name, type, odt, opened, layout, platformName, lines} = platformSet;
+function Tab({tab, select}){
+	const {layout, psName, normal} = tab;
+	const {name, type, odt, opened, platformName, lines} = PLATFORM_SETS[psName];
 	// Ideas: render background as dark or brown color to represent the ground, render track description (ie "westbound local") to the side, by default show services lined up then expand
 	return (
 		<>
-			<div style={{"margin-bottom": "4px"}}> <span style={{"font-weight": "bold"}}>{lines.join(", ")} Platforms</span> ({type}, Opened {opened.toLocaleString()})</div>
+			{normal && <Label data={{label: lines.join(", "), type, opened}}/>}
 			{layout.map((floor, index) => (
 				<>
 					{layout.length > 1 && (<><span style={{"font-style" : "italic"}}>Floor {type === PlatformSetType.UNDERGROUND ? "B" : ""}{index + 1}</span><br/></>) /*TODO label floor*/}
@@ -594,6 +669,7 @@ function PlatformSet({platformSet, select}){
 						<>
 							{element.category !== "Platform" && index2 === 0 && <hr style={{"border-top-width": "3px", "border-color": "#888888"}}/>}
 							<div style={{margin: "2px 0px"}}>
+								{element.category === "Label" && <Label data={element}/>}
 								{element.category === "Track" && <Track track={element} psName={name} select={select}/>}
 								{element.category === "Platform" && <Platform platform={element}/>}
 								{element.category === "Misc" && element.description}
@@ -612,12 +688,18 @@ function PlatformSet({platformSet, select}){
 	);
 }
 
+function Label({data}){
+	const {label, type, opened} = data;
+	const tostring = type || opened ? `(${type ? (type + ", ") : ""}${opened ? ("Opened " + opened.toLocaleString()) : ""})` : "";
+	return <div style={{"margin-bottom": "4px"}}> <span style={{"font-weight": "bold"}}>{label} Platforms</span> {tostring}</div>
+}
+
 function Track({track, psName, select}){
-	const {label, direction, compassDirection, stops, service} = track;
+	const {type, direction, compassDirection, stops, service} = track;
 	let hasService = false;
 	return (
 		<>
-			<div>{direction === InternalDirection.NEXT ? "\u2190" : "\u2192"}{compassDirection}bound {label}</div>
+			<div>{direction === InternalDirection.NEXT ? "\u2190" : "\u2192"}{compassDirection}bound {type}</div>
 			<div style={{height: "24px", margin: "5px 0px", background: "linear-gradient(to bottom, rgb(255 255 255 / 0%), rgb(255 0 153 / 0%) 4px, #E9E9E9 4px, #E9E9E9 8px, rgb(255 255 255 / 0%) 8px, rgb(255 0 153 / 0%) 16px, #E9E9E9 16px, #E9E9E9 20px, rgb(255 255 255 / 0%) 20px, rgb(255 255 255 / 0%) 24px), repeating-linear-gradient(to right, #FFFFFF, #FFFFFF 12px, #c19a6b 12px, #c19a6b 20px)"}}/>
 			{Object.entries(service).map(([name, serviceTimeStops], index) => {
 				const {serviceTime} = serviceTimeStops;
