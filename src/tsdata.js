@@ -5,7 +5,7 @@ import {
 	Division,
 	SignalingType,
 	Company,
-} from "./enums.jsx";
+} from "./enums.js";
 import trackData from "./track.json";
 import stationsData from "./stations.json";
 

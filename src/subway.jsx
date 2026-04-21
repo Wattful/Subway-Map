@@ -1,9 +1,9 @@
 import React, {useState, useEffect, useMemo, useCallback} from "react";
 import {BrowserRouter, Route, Routes, useSearchParams} from "react-router-dom";
 import {DateTime, Interval} from "luxon";
-import {SERVICES, STATIONS, PLATFORM_SETS, MIN_BOARDINGS, MAX_RANK} from "./data.jsx";
+import {SERVICES, STATIONS, PLATFORM_SETS, MIN_BOARDINGS, MAX_RANK} from "./data.js";
 import {BULLETS} from "./bullets.jsx";
-import {TRACK_SEGMENTS} from "./tsdata.jsx"
+import {TRACK_SEGMENTS} from "./tsdata.js"
 import {
 	ServiceTimeType,
 	StructureType,
@@ -14,8 +14,8 @@ import {
 	SignalingType,
 	Company,
 	ServiceTimeComponent,
-} from "./enums.jsx";
-import {serviceTimeEqual, getDisambiguatedName as gdn} from "./objects.jsx";
+} from "./enums.js";
+import {serviceTimeEqual, getDisambiguatedName as gdn} from "./objects.js";
 
 // Misc TODO 
 // Add spinner

@@ -10,7 +10,7 @@ import {
 	ServiceDirection,
 	ServiceTimeComponent,
 	ServiceTimeType,
-} from "./enums.jsx";
+} from "./enums.js";
 import {
 	Track,
 	getTerminalKey as gtk,
@@ -30,12 +30,12 @@ import {
 	SegmentServiceLabel,
 	ServiceStop,
 	Miscellaneous,
-} from "./objects.jsx";
+} from "./objects.js";
 import {
 	TRACK_SEGMENTS,
 	PLATFORM_SET_COORDS,
 	SERVICE_SEGMENT_BORDERS
-} from "./tsdata.jsx";
+} from "./tsdata.js";
 
 /*
 Class which takes a base layout and allows us to edit that layout.

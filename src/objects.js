@@ -1,7 +1,7 @@
 import {
 	ServiceTimeComponent,
 	ServiceTimeType,
-} from "./enums.jsx";
+} from "./enums.js";
 
 function Track(line, type, direction, stops, disambiguator=null, summary=null, trackDescription=null, showTrack=true){
 	this.category = "Track";

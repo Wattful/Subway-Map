@@ -1,5 +1,5 @@
 import React from "react";
-import {Service} from "./enums.jsx"
+import {Service} from "./enums.js"
 
 function CircleBullet({color, children}){
 	// TODO are these sizes necessary?
