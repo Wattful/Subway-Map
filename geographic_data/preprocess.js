@@ -405,7 +405,7 @@ doubleDoubleAssignAndMarkResolved(8101821, 313283, 8103295, 8100948); // Nassau 
 doubleDoubleAssignAndMarkResolved(8102005, 8102751, 8102767, 8101144); // Brighton Fulton st lines
 doubleDoubleAssignAndMarkResolved(8102230, 8103466, 8103461, 8101902); // Flushing 6th av lines
 doubleDoubleAssignAndMarkResolved(8102237, 302073, 8104791, 8103527); // 8th av Lenox av lines
-doubleDoubleAssignAndMarkResolved(8102344, 8102925, 8104041, 8101895); // Jamaica Fulton st lines
+doubleDoubleAssignAndMarkResolved(8102344, 8101895, 8102925, 8104041); // Jamaica Fulton st lines
 doubleDoubleAssignAndMarkResolved(8102361, 8103462, 8102555, 8102230); // Broadway Flushing lines
 doubleDoubleAssignAndMarkResolved(8102426, 8104292, 8103499, 8103500); // 6th av Broadway lines
 doubleDoubleAssignAndMarkResolved(8102429, 254633, 8103156, 8100208); // Crosstown Flushing lines

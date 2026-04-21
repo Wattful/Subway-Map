@@ -34,7 +34,7 @@ forEachCoord(stationsData.features, minMaxFunction);
 const width = Math.ceil((xmax - xmin) * (height / (ymax - ymin)));
 
 const boundingBoxFeatures = [{"type": "Feature", "properties": {"isboundingbox": true}, "geometry": {"type": "Point", "coordinates": [xmin, ymin]}}, { "type": "Feature", "properties": {"isboundingbox": true}, "geometry": {"type": "Point", "coordinates": [xmax, ymax]}}];
-const filterBoundingBoxFeatures = ({type, features}) => {return {type, features: features.filter((feature) => !feature.properties.isboundingbox)}};
+const filterBoundingBoxFeatures = ({type, features}) => ({type, features: features.filter((feature) => !feature.properties.isboundingbox)});
 
 const shorelineInput = {type: "FeatureCollection", features: [...shorelineData.features, ...boundingBoxFeatures]};
 const pixel_shoreline = filterBoundingBoxFeatures(geoProject(shorelineInput, d3Geo.geoIdentity().reflectY(true).fitHeight(height, shorelineInput)));
@@ -82,7 +82,7 @@ fs.writeFile("../src/track.json", JSON.stringify(trackJson, null, 4), (err) => {
 });
 
 const stationsJson = pixel_stations.features.reduce((acc, feature) => {
-    const {id, ...props} = feature.properties;
+    const {id} = feature.properties;
     acc[id] = {id, coords: {x: feature.geometry.coordinates[0], y: feature.geometry.coordinates[1]}};
     return acc;
 }, {})

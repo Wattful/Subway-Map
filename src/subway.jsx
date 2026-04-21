@@ -1,24 +1,21 @@
 import React, {useState, useEffect, useMemo, useCallback} from "react";
-import {BrowserRouter, Route, Routes, Link, useSearchParams, useParams} from "react-router-dom";
+import {BrowserRouter, Route, Routes, useSearchParams} from "react-router-dom";
 import {DateTime, Interval} from "luxon";
-import {SERVICES, STATIONS, PLATFORM_SETS, MIN_BOARDINGS} from "./data.jsx";
+import {SERVICES, STATIONS, PLATFORM_SETS, MIN_BOARDINGS, MAX_RANK} from "./data.jsx";
 import {BULLETS} from "./bullets.jsx";
 import {TRACK_SEGMENTS} from "./tsdata.jsx"
 import {
-	ServiceType,
-	LineName,
-	PlatformSetType,
+	ServiceTimeType,
+	StructureType,
 	TrackType,
-	PlatformType,
 	PlatformService,
-	InternalDirection,
-	ServiceDirection,
+	ArrowDirection,
 	Division,
 	SignalingType,
-	JunctionType,
-	BuiltFor,
+	Company,
+	ServiceTimeComponent,
 } from "./enums.jsx";
-import {serviceTimeEqual} from "./objects.jsx";
+import {serviceTimeEqual, getDisambiguatedName as gdn} from "./objects.jsx";
 
 // Misc TODO 
 // Add spinner
@@ -29,6 +26,9 @@ import {serviceTimeEqual} from "./objects.jsx";
 // Fixed text and arrow representation of terminal stations
 // Multiple values for track attributes (QBL/astoria overlap)
 // Add ability to generate larger image and scale down
+
+// How 2 measure track length
+// Idea 1 - update property in TRACK_SEGMENTS on first render - works but is a bit wonky
 
 
 // https://stackoverflow.com/questions/36862334/get-viewport-window-height-in-reactjs
@@ -66,7 +66,6 @@ const useMousePosition = () => {
 
 const BACKGROUND_SRC = require("./shoreline.png");
 
-const selfPointingTrackAttributeObject = (attribute, name, visible, options, discrete) => {return {[attribute]: new TrackAttribute(attribute, name, visible, options, discrete)}};
 const trackAttributesBase = [
 	new TrackAttribute("total_tracks", "Total Tracks", true, [1, 2, 3, 4, 6, 7, 8], true),
 	new TrackAttribute("used_tracks", "Used Tracks", true, [0, 1, 2, 3, 4, 6, 7, 8], true),
@@ -82,8 +81,8 @@ const trackAttributesBase = [
 		["1960 - 1999", Interval.fromDateTimes(DateTime.fromObject({year: 1960, month: 1, day: 1}), DateTime.fromObject({year: 2000, month: 1, day: 1}))],
 		["2000 - present", Interval.fromDateTimes(DateTime.fromObject({year: 2000, month: 1, day: 1}), DateTime.fromObject({year: 3000, month: 1, day: 1}))],
 	], false), // Start: >=, end: <
-	new TrackAttribute("obf", "Originally Built For", true, Object.values(BuiltFor), true),
-	new TrackAttribute("type", "Track Type", true, Object.values(PlatformSetType), true),
+	new TrackAttribute("obf", "Originally Built For", true, Object.values(Company), true),
+	new TrackAttribute("type", "Track Type", true, Object.values(StructureType), true),
 	new TrackAttribute("division", "Division", true, Object.values(Division), true),
 	new TrackAttribute("signaling", "Signaling Type", true, Object.values(SignalingType), true),
 	new TrackAttribute("service", "Service", false, [null, ...Object.values(TrackType)], true),
@@ -114,13 +113,13 @@ function SubwayMap({}){
 	// TODO wrap all non-hooks in useMemo?
 	const [searchParams, setSearchParams] = useSearchParams();
 	const focusType = ["service", "ps"].includes(searchParams.get("ftype")) ? searchParams.get("ftype") : null;
-	const focusValue = focusType && {service: SERVICES, ps: PLATFORM_SETS}[focusType][searchParams.get("fvalue")] ? searchParams.get("fvalue") : null;
+	const focusValue = focusType && {service: SERVICES, ps: STATIONS}[focusType][searchParams.get("fvalue")] ? searchParams.get("fvalue") : null;
 	const attribute = TRACK_ATTRIBUTES[searchParams.get("attribute")] ? searchParams.get("attribute") : null;
 	const select = searchParams.get("select") === "true" || false;
 	const scale = searchParams.get("scale") === "true" || false;
 	const service = searchParams.get("service") !== null && focusType === "service" && focusValue && SERVICES[focusValue][parseInt(searchParams.get("service"))] ? parseInt(searchParams.get("service")) : null;
 	const pattern = searchParams.get("pattern") !== null && focusType === "service" && focusValue && service !== null && SERVICES[focusValue][service].servicePatterns[parseInt(searchParams.get("pattern"))] ? parseInt(searchParams.get("pattern")) : null;
-	const tab = searchParams.get("tab") !== null ? parseInt(searchParams.get("tab")) : null; // TODO extra validation
+	const platformSet = searchParams.get("ps") === null ? null : searchParams.get("ps"); // TODO extra validation
 	const [psHover, setPsHover] = useState(null);
 	const [serviceHover, setServiceHover] = useState(null);
 	const [patternHover, setPatternHover] = useState(null);
@@ -152,24 +151,18 @@ function SubwayMap({}){
 
 	// Absolute position of 0, 0 in the SVG coordinate system if SVG is unzoomed and unpanned
 	// TODO "calculate for x and y function" to simplify code?
-	const initialOrigin = useMemo(() => {
-		return svgDimensions === null ? null : {
+	const initialOrigin = useMemo(() => svgDimensions === null ? null : {
 			x: windowDimensions.x/2 - svgDimensions.x/2,
 			y: windowDimensions.y/2 - svgDimensions.y/2,
-		}
-	}, [svgDimensions, windowDimensions])
-	const absoluteCoordsToSvgCoords = useCallback((coords) => {
-		return {
+		}, [svgDimensions, windowDimensions])
+	const absoluteCoordsToSvgCoords = useCallback((coords) => ({
 			x: (coords.x - initialOrigin.x - baseTranslate.x) / zoom,
 			y: (coords.y - initialOrigin.y - baseTranslate.y) / zoom,
-		}
-	}, [initialOrigin, baseTranslate, zoom]);
-	const svgCoordsToAbsoluteCoords = useCallback((coords) => {
-		return {
+		}), [initialOrigin, baseTranslate, zoom]);
+	const svgCoordsToAbsoluteCoords = useCallback((coords) => ({
 			x: (coords.x * zoom) + initialOrigin.x + baseTranslate.x,
 			y: (coords.y * zoom) + initialOrigin.y + baseTranslate.y,
-		}
-	}, [initialOrigin, baseTranslate, zoom]);
+		}), [initialOrigin, baseTranslate, zoom]);
 
 	const updateZoom = useCallback((delta, ignoreMouse) => {
 		if(startDragPosition){
@@ -211,9 +204,11 @@ function SubwayMap({}){
 	}
 
 	const highlight = attribute || pattern !== null || patternHover !== null ? {...TRACK_ATTRIBUTES[(pattern !== null || patternHover !== null) ? "service" : attribute], highlightValue} : null;
-	const setFocus = (type, doubleclick=false) => {
-		return value => {
-			if(!value || doubleclick && value === focusValue){
+	const setFocus = (type, doubleclick=false) => value => {
+			updateSearchParams(setSearchParams, "pattern", null);
+			updateSearchParams(setSearchParams, "service", null);
+			updateSearchParams(setSearchParams, "ps", null);
+			if(!value || (doubleclick && value === focusValue)){
 				updateSearchParams(setSearchParams, "ftype", null);
 				updateSearchParams(setSearchParams, "fvalue", null);
 				return true;
@@ -223,7 +218,6 @@ function SubwayMap({}){
 				return false;
 			}
 		}
-	}
 
 	const pat = patternHover === null ? pattern : patternHover;
 	const ser = serviceHover === null ? service : serviceHover;
@@ -241,8 +235,8 @@ function SubwayMap({}){
 	const stops = {};
 	if(pat !== null){
 		SERVICES[focusValue][ser].servicePatterns[pat].compiledRoute.reduce((obj, serviceStop) => {
-			const {stop, tracksNext, tracksPrevious} = serviceStop;
-			obj[stop] = [...tracksNext, ...tracksPrevious].some((track) => track.stops);
+			const {stop, disambiguator, tracksNorth, tracksSouth} = serviceStop;
+			obj[gdn(stop, disambiguator)] = [...tracksNorth, ...tracksSouth].some((track) => track.stops);
 			return obj;
 		}, stops)
 	}
@@ -267,13 +261,14 @@ function SubwayMap({}){
 				/*style={{"flex": "0 0 auto", "z-index": "0"}}*/
 			>
 				<g transform={`matrix(${zoom} 0 0 ${zoom} ${translate.x} ${translate.y})`}>
-					<image x="0" y="0" width="100%" xlinkHref={BACKGROUND_SRC}></image>
+					<image x="0" y="0" width="100%" xlinkHref={BACKGROUND_SRC} />
 
 					{Object.values(TRACK_SEGMENTS).filter(segment => segment.visible).map(segment => (
 						<TrackSegmentSvg 
+							key={segment.id}
 							id={segment.id} 
-							d={segment.d} 
-							baseWidth={svgDimensions.y/275} 
+							d={segment.d}
+							baseWidth={svgDimensions.y/500} 
 							attributes={getAttributes(segment)} 
 							highlight={highlight} 
 							hover={segment.lines.includes(lineHover)} 
@@ -282,6 +277,7 @@ function SubwayMap({}){
 					))}
 					{Object.entries(PLATFORM_SETS).map(([identifier, ps]) => (
 						<PlatformSetDot 
+							key={identifier}
 							platformSet={ps} 
 							colors={PS_COLORS} 
 							baseSize={svgDimensions.y/275} 
@@ -289,8 +285,8 @@ function SubwayMap({}){
 							stops={Object.keys(stops).length > 0 ? stops : null} 
 							setPsHover={(tr) => setPsHover(tr ? identifier : null)}
 							setFocus={() => {
-								const doubleclick = setFocus("ps", true)(identifier);
-								updateSearchParams(setSearchParams, "tab", doubleclick ? null : ps.tab);
+								const doubleclick = setFocus("ps", identifier === platformSet)(ps.stationKey);
+								updateSearchParams(setSearchParams, "ps", doubleclick ? null : identifier);
 							}}
 						/>
 					))}
@@ -306,8 +302,8 @@ function SubwayMap({}){
 							select={select}
 							setPsHover={(tr) => setPsHover(tr ? psHover : null)}
 							setFocus={() => {
-								const doubleclick = setFocus("ps", true)(identifier);
-								updateSearchParams(setSearchParams, "tab", doubleclick ? null : ps.tab);
+								const doubleclick = setFocus("ps", true)(psHover);
+								updateSearchParams(setSearchParams, "ps", doubleclick ? null : gdn(PLATFORM_SETS[psHover].name, PLATFORM_SETS[psHover].disambiguator));
 							}}
 						/>
 					</span>
@@ -337,46 +333,37 @@ function SubwayMap({}){
 					<label style={{"margin-right": "8px"}}>Track Highlight</label>
 					<select onChange={(event) => {updateSearchParams(setSearchParams, "attribute", TRACK_ATTRIBUTES_NAME_MAP?.[event.target.value]?.attribute)}}>
 						{[{attribute: null, name: "None", visible: true}, ...Object.values(TRACK_ATTRIBUTES)].filter(({visible}) => visible).map(({attribute: att, name}) => (
-							<option selected={att === attribute}>{name}</option>
+							<option key={att} selected={att === attribute}>{name}</option>
 						))}
 					</select>
 					<br/>
 					<label style={{"margin-right": "8px"}}>Station</label>
 					<select onChange={(event) => {
 						if(event.target.value === "None"){
-							updateSearchParams(setSearchParams, "ftype", null);
-							updateSearchParams(setSearchParams, "fvalue", null);
+							setFocus("ps", false)(null);
 						} else {
-							updateSearchParams(setSearchParams, "ftype", "ps");
-							updateSearchParams(setSearchParams, "fvalue", event.target.value);
+							setFocus("ps", false)(PLATFORM_SETS[event.target.value].stationKey);
+							updateSearchParams(setSearchParams, "ps", event.target.value);
 						}
-						
 					}}>
 												{/*TODO change to stations?*/}
 						{["None", ...Object.keys(PLATFORM_SETS).toSorted()].map((name) => (
 							// TODO this doesn't work, mouseenter/leave are not supported by option, need a custom component 
-							<option onMouseEnter={() => {setPsHover(null)}} onMouseLeave={() => {setPsHover(null)}} selected={(focusType === "ps" && focusValue === name) || (focusType !== "ps" && name === null)}>{name}</option>
+							<option key={name} onMouseEnter={() => {setPsHover(null)}} onMouseLeave={() => {setPsHover(null)}} selected={(focusType === "ps" && platformSet === name) || (focusType !== "ps" && name === null)}>{name}</option>
 						))}
 					</select>
 					<br/>
 					<label style={{"margin-right": "8px"}}>Service</label>
 					<select onChange={(event) => {
 						if(event.target.value === "None"){
-							// TODO use setFocus here?
-							updateSearchParams(setSearchParams, "ftype", null);
-							updateSearchParams(setSearchParams, "fvalue", null);
-							updateSearchParams(setSearchParams, "service", null);
-							updateSearchParams(setSearchParams, "pattern", null);
+							setFocus("service", false)(null);
 						} else {
-							updateSearchParams(setSearchParams, "ftype", "service");
-							updateSearchParams(setSearchParams, "fvalue", event.target.value);
-							updateSearchParams(setSearchParams, "service", null);
-							updateSearchParams(setSearchParams, "pattern", null);
+							setFocus("service", false)(event.target.value);
 						}
 						
 					}}>
 						{["None", ...Object.keys(SERVICES)].map((name) => (
-							<option selected={(focusType === "service" && focusValue === name) || (focusType !== "service" && name === null)}>{name}</option>
+							<option key={name} selected={(focusType === "service" && focusValue === name) || (focusType !== "service" && name === null)}>{name}</option>
 						))}
 					</select>
 					<br/>
@@ -399,9 +386,9 @@ function SubwayMap({}){
 				<span style={{position: "absolute", "overflow-y": "scroll", top: "0px", right: "0px", "background-color": "#FFFFFF"}} /*style={{"flex": "4 1 auto"}}*/>
 					{focusType === "ps" && 
 						<StationFocus 
-							station={STATIONS[PLATFORM_SETS[focusValue].stationKey]} 
-							tab={tab} 
-							setTab={(tab) => updateSearchParams(setSearchParams, "tab", tab)}
+							station={STATIONS[focusValue]} 
+							psName={platformSet}
+							setPsName={(psName) => updateSearchParams(setSearchParams, "ps", psName)}
 							select={select}
 						/>
 					}
@@ -409,13 +396,13 @@ function SubwayMap({}){
 						<ServiceFocus 
 							servicesInformation={SERVICES[focusValue]} 
 							selected={{service, pattern}} 
-							setHover={(service, pattern) => {
-								setServiceHover(service);
-								setPatternHover(pattern);
+							setHover={(s, p) => {
+								setServiceHover(s);
+								setPatternHover(p);
 							}} 
-							setSelect={(ser, pat) => {
-								updateSearchParams(setSearchParams, "service", ser);
-								updateSearchParams(setSearchParams, "pattern", pat);
+							setSelect={(s, p) => {
+								updateSearchParams(setSearchParams, "service", s);
+								updateSearchParams(setSearchParams, "pattern", p);
 							}}
 						/>
 					}
@@ -455,18 +442,18 @@ function TrackSegmentSvg({id, d, baseWidth, attributes, highlight, hover, setLin
             onMouseLeave={() => {setLineHover(false)}}
         />
     )
-};
+}
 
 //TODO could change highlight from string to bool
 function PlatformSetDot({platformSet, colors, baseSize, scale, stops, setPsHover, setFocus}){
-	const {name, coordinates: {x, y}} = platformSet;
-	const scaleBaseSize = baseSize/2;
+	const {name, disambiguator, coordinates: {x, y}} = platformSet;
+	const scaleBaseSize = baseSize/3;
 	const size = scale ? Math.sqrt(STATIONS[platformSet.stationKey].boardings / MIN_BOARDINGS) * scaleBaseSize : baseSize;
 	let fill;
-	if(stops === null || stops[name] == undefined){
-		fill = colors["null"];
-	} else if(stops[name]){ // TODO directional only stop?
-		fill = colors["Stop"];
+	if(stops === null || stops[gdn(name, disambiguator)] === undefined){
+		fill = colors.null;
+	} else if(stops[gdn(name, disambiguator)]){ // TODO directional only stop?
+		fill = colors.Stop;
 	} else { // Skipped stop
 		fill = colors["Skipped Stop"];
 	}
@@ -488,8 +475,7 @@ function PlatformSetDot({platformSet, colors, baseSize, scale, stops, setPsHover
 function Legend({name, colors, onTrMouseEnter, onTrMouseLeave, SvgChild}){
 	// TODO could include onClick
 	return (
-		<>
-			<table style={{"border-spacing": "10px"}}>
+		<table style={{"border-spacing": "10px"}}>
 				<thead>
 					<tr>
 						<th colSpan="2">{name}</th>
@@ -497,32 +483,41 @@ function Legend({name, colors, onTrMouseEnter, onTrMouseLeave, SvgChild}){
 				</thead>
 				<tbody>
 					{Object.entries(colors).filter(([option, _]) => option !== "null").map(([option, color]) => (
-						<tr onMouseEnter={() => {onTrMouseEnter(option)}} onMouseLeave={() => {onTrMouseLeave(option)}}>
+						<tr key={option} onMouseEnter={() => {onTrMouseEnter(option)}} onMouseLeave={() => {onTrMouseLeave(option)}}>
 							<td>{option}<span style={{display: "inline-block", width: "12px"}}/></td>
 							<td>
 								<svg xmlns="http://www.w3.org/2000/svg" width="30px" height="20px" style={{display: "inline-block"}}>
-									 <SvgChild color={color} />
+									<SvgChild color={color} />
 								</svg>
 							</td>
 						</tr>
 					))}
 				</tbody>
 			</table>
-		</>
 	)
 }
 
 function TrackLegend({data, setHighlightValue}){
 	const {name, colors} = data;
-	return <Legend name={name} colors={colors} onTrMouseEnter={(option) => {setHighlightValue(option)}} onTrMouseLeave={(option) => {setHighlightValue(null)}} SvgChild={({color}) => (
-		<line x1="0" y1="50%" x2="100" y2="50%" stroke={color} strokeWidth="2.5" />
-	)}/>
+	return <Legend name={name} colors={colors} onTrMouseEnter={(option) => {setHighlightValue(option)}} onTrMouseLeave={() => {setHighlightValue(null)}} SvgChild={TrackSvgChild}/>;
+}
+
+function TrackSvgChild({color}){
+	return <line x1="0" y1="50%" x2="100" y2="50%" stroke={color} strokeWidth="2.5" />;
 }
 
 function PlatformSetLegend({colors, size}){
-	return <Legend name={"Stations"} colors={colors} onTrMouseEnter={(option) => {}} onTrMouseLeave={(option) => {}} SvgChild={({color}) => (
-		<ellipse style={{fill: color, stroke: "rgb(0, 0, 0)"}} rx={size} ry={size} cx="50%" cy="50%"/>
-	)}/>
+	return (<Legend name="Stations" colors={colors} onTrMouseEnter={() => {}} onTrMouseLeave={() => {}} SvgChild={platformSetSvgChildWithSize(size)}/>)
+}
+
+function platformSetSvgChildWithSize(size){
+	return function PlatformSetSvgChildCur({color}) {
+		return <PlatformSetSvgChild color={color} size={size}/>;
+	} 
+}
+
+function PlatformSetSvgChild({color, size}){
+	return <ellipse style={{fill: color, stroke: "rgb(0, 0, 0)"}} rx={size} ry={size} cx="50%" cy="50%"/>;
 }
 
 function ServiceFocus({servicesInformation, selected, setHover, setSelect}){
@@ -535,7 +530,17 @@ function ServiceFocus({servicesInformation, selected, setHover, setSelect}){
 						{servicePatterns.map(({serviceDescription}, patternIndex) => {
 							const isSelected = selected.service === serviceIndex && selected.pattern === patternIndex;
 							const child = (
-								<div onMouseEnter={() => {setHover(serviceIndex, patternIndex)}} onMouseLeave={() => {setHover(null, null)}} onClick={() => {isSelected ? setSelect(null, null) : setSelect(serviceIndex, patternIndex)}}>
+								<div 
+									onMouseEnter={() => {setHover(serviceIndex, patternIndex)}} 
+									onMouseLeave={() => {setHover(null, null)}} 
+									onClick={() => {
+										if(isSelected){
+											setSelect(null, null)
+										} else {
+											setSelect(serviceIndex, patternIndex)
+										}
+									}}
+								>
 									{""}{serviceDescription}
 								</div>
 							)
@@ -550,9 +555,11 @@ function ServiceFocus({servicesInformation, selected, setHover, setSelect}){
 }
 
 // TODO Fix scrolling in station window (use CSS "float" property instead of flex?)
-function StationFocus({station, tab, setTab, select}){
-	const {name, platformSets, tabs, boardings, odt, rank} = station;
-	const renderedTab = (tab === undefined || tab === null || tab > station.tabs.length - 1) ? 0 : tab;
+function StationFocus({station, psName, setPsName, select}){
+	const {name, platformSets, boardings: initialBoardings, odt, rank: initialRank} = station;
+	// TODO change once times square is added
+	const boardings = typeof initialBoardings === "string" ? 0 /*STATIONS[initialBoardings].boardings*/ : initialBoardings;
+	const rank = typeof boardings === "string" ? 0 /*STATIONS[initialBoardings].rank*/ : initialRank;
 	const ordinal = num => {
 		if(num % 10 === 1 && num % 100 !== 11){
 			return `${num}st`;
@@ -565,14 +572,14 @@ function StationFocus({station, tab, setTab, select}){
 		}
 	};
 	const bullets = new Set();
-	for(const platformSet of platformSets){
+	for(const platformSet of Object.values(platformSets)){
 		for(const track of platformSet.tracks){
-			if(!track.stops){
-				continue;
-			}
-			for(const [service, {serviceTime}] of Object.entries(track.service)){
-				// TODO order, MAKE THIS A SEPARATE FUNCTION NOTE: late nights omitted on purpose
-				if(select || [serviceTime.earlyMorning, serviceTime.rushHour, serviceTime.midday, serviceTime.evening, serviceTime.weekends].some(t => t === ServiceType.YES)){
+			for(const {service, stops, serviceTime} of Object.values(track.service)){
+				if(!stops){
+					continue;
+				}
+				// TODO order, NOTE: late nights and weekends omitted on purpose
+				if(select || serviceTime.hasServiceForTime([ServiceTimeComponent.WEEKDAYS_EXCEPT_LATE_EVENINGS], ServiceTimeType.YES)){
 					bullets.add(service);
 				}
 			}
@@ -584,21 +591,22 @@ function StationFocus({station, tab, setTab, select}){
 				{name}<br/>
 				{Array.from(bullets).toSorted().map(bullet => (BULLETS[bullet]()))}
 			</div>
-			{boardings.toLocaleString()} boardings (2023), {ordinal(rank)} of {Object.values(STATIONS).length}<br/>
+			{boardings.toLocaleString()} boardings (2023), {ordinal(rank)} of {MAX_RANK}<br/>
 			Opposite direction transfer: {{true: "Yes", false: "No", null: "N/A"}[odt]}<br/><br/>
 			{/*TODO tab titles*/}
-			{tabs.length === 1 ? (
-					<Tab tab={tabs[renderedTab]} select={select}/>
+			{Object.values(platformSets).length === 1 ? (
+					<Tab platformSet={platformSets[psName]} select={select}/>
 				) : (
 					<>
-						{tabs.map((tab, index) => 
-							<span 
-								style={{padding: "10px", "font-weight": index === renderedTab ? "bold" : "normal"}} 
-								onClick={() => setTab(index)}>{PLATFORM_SETS[tab.psName].lines.map(lineName => lineName.slice(lineName.indexOf(" "))).join(", ")}
-							</span>
+						{Object.values(platformSets).map((platformSet) => 
+							(<span 
+								key={gdn(platformSet.name, platformSet.disambiguator)}
+								style={{padding: "10px", "font-weight": gdn(platformSet.name, platformSet.disambiguator) === psName ? "bold" : "normal"}} 
+								onClick={() => setPsName(gdn(platformSet.name, platformSet.disambiguator))}>{platformSet.lines.filter(lineName => lineName !== null).map(lineName => lineName.slice(lineName.indexOf(" "))).join(", ")}
+							</span>)
 						)}
 						<br/>
-						<Tab tab={tabs[renderedTab]} select={select}/>
+						<Tab platformSet={platformSets[psName]} select={select}/>
 					</>
 				)
 			}
@@ -609,7 +617,7 @@ function StationFocus({station, tab, setTab, select}){
 
 // TODO change name to platformset, add "pointer triangle"?
 function PlatformSetPreview({platformSet, select, setPsHover, setFocus}){
-	const {name, type, odt, layout, platformName} = platformSet;
+	const {name} = platformSet;
 	const bullets = getBullets([platformSet], select);
 	return (
 		<div 
@@ -627,7 +635,7 @@ function PlatformSetPreview({platformSet, select, setPsHover, setFocus}){
 
 function LinePreview({line, select}){
 	const platformSets = Object.values(PLATFORM_SETS).filter(ps => ps.tracks.map(el => el.line).includes(line));
-	const bullets = getBullets(platformSets, select);
+	const bullets = getBullets(platformSets, select, line);
 	return (
 		<div style={{"background-color": "#000000", "color": "#FFFFFF", "font-family": "Helvetica", "font-weight": "bold", "border-top": "10px solid black", "box-shadow": "inset 0 2px white", "padding": "2px 10px"}}>
 			{line}<br/>
@@ -636,16 +644,16 @@ function LinePreview({line, select}){
 	)
 }
 
-function getBullets(platformSets, select){
+function getBullets(platformSets, select, line=null){
 	const bullets = new Set();
 	for(const platformSet of platformSets){
 		for(const track of platformSet.tracks){
-			if(!track.stops){
-				continue;
-			}
-			for(const [service, {serviceTime}] of Object.entries(track.service)){
-				// TODO order, MAKE THIS A SEPARATE FUNCTION NOTE: late nights omitted on purpose
-				if(select || [serviceTime.earlyMorning, serviceTime.rushHour, serviceTime.midday, serviceTime.evening, serviceTime.weekends].some(t => t === ServiceType.YES)){
+			for(const {service, stops, serviceTime} of Object.values(track.service)){
+				if(!stops){
+					continue;
+				}
+				// TODO order NOTE: late nights and weekends omitted on purpose
+				if((select || serviceTime.hasServiceForTime([ServiceTimeComponent.WEEKDAYS_EXCEPT_LATE_EVENINGS], ServiceTimeType.YES)) && (line === null || track.line === line)){
 					bullets.add(service);
 				}
 			}
@@ -655,16 +663,15 @@ function getBullets(platformSets, select){
 	return bullets;
 }
 
-function Tab({tab, select}){
-	const {layout, psName, normal} = tab;
-	const {name, type, odt, opened, platformName, lines} = PLATFORM_SETS[psName];
+function Tab({platformSet, select}){
+	const {name, type, opened, lines, layout, normal} = platformSet;
 	// Ideas: render background as dark or brown color to represent the ground, render track description (ie "westbound local") to the side, by default show services lined up then expand
 	return (
 		<>
 			{normal && <Label data={{label: lines.join(", "), type, opened}}/>}
 			{layout.map((floor, index) => (
 				<>
-					{layout.length > 1 && (<><span style={{"font-style" : "italic"}}>Floor {type === PlatformSetType.UNDERGROUND ? "B" : ""}{index + 1}</span><br/></>) /*TODO label floor*/}
+					{layout.length > 1 && (<><span style={{"font-style" : "italic"}}>Floor {type === StructureType.UNDERGROUND ? "B" : ""}{index + 1}</span><br/></>) /*TODO label floor*/}
 					{floor.map((element, index2) => (
 						<>
 							{element.category !== "Platform" && index2 === 0 && <hr style={{"border-top-width": "3px", "border-color": "#888888"}}/>}
@@ -690,57 +697,79 @@ function Tab({tab, select}){
 
 function Label({data}){
 	const {label, type, opened} = data;
-	const tostring = type || opened ? `(${type ? (type + ", ") : ""}${opened ? ("Opened " + opened.toLocaleString()) : ""})` : "";
+	const tostring = type || opened ? `(${type ? (`${type  }, `) : ""}${opened ? (`Opened ${  opened.toLocaleString()}`) : ""})` : "";
 	return <div style={{"margin-bottom": "4px"}}> <span style={{"font-weight": "bold"}}>{label} Platforms</span> {tostring}</div>
 }
 
 function Track({track, psName, select}){
-	const {type, direction, compassDirection, stops, service} = track;
+	const {type, direction, serviceDirection, service, summary, trackDescription, showTrack} = track;
 	let hasService = false;
+	const arrows = {
+		[ArrowDirection.RIGHT]: "\u2192",
+		[ArrowDirection.LEFT]: "\u2190",
+	}
+	const bound = direction === ArrowDirection.BOTH ? "" : `${serviceDirection}bound `;
+	const sortServiceLines = ([_, a], [__, b]) => {
+		const {service: serviceA, stops: stopsA, direction: directionA} = a;
+		const {service: serviceB, stops: stopsB, direction: directionB} = b;
+		if(directionA === directionB){
+			if(stopsA === stopsB){
+				// TODO sort by service time? (ie "all times" services before "late nights" services)
+				return serviceA.localeCompare(serviceB);
+			} else {
+				return stopsA ? -1 : 1;
+			}
+		} else {
+			return directionA === ArrowDirection.LEFT ? -1 : 1
+		}
+	}
 	return (
 		<>
-			<div>{direction === InternalDirection.NEXT ? "\u2190" : "\u2192"}{compassDirection}bound {type}</div>
-			<div style={{height: "24px", margin: "5px 0px", background: "linear-gradient(to bottom, rgb(255 255 255 / 0%), rgb(255 0 153 / 0%) 4px, #E9E9E9 4px, #E9E9E9 8px, rgb(255 255 255 / 0%) 8px, rgb(255 0 153 / 0%) 16px, #E9E9E9 16px, #E9E9E9 20px, rgb(255 255 255 / 0%) 20px, rgb(255 255 255 / 0%) 24px), repeating-linear-gradient(to right, #FFFFFF, #FFFFFF 12px, #c19a6b 12px, #c19a6b 20px)"}}/>
-			{Object.entries(service).map(([name, serviceTimeStops], index) => {
-				const {serviceTime} = serviceTimeStops;
-				const StopDescription = () => stops ? <NextLastStops serviceTimeStops={serviceTimeStops} psName={psName} select={select}/> : " does not stop here"
-				if(select){
-					hasService = true;
-					return <div style={{margin: "5px 0px"}}>{BULLETS[name]()}{` ${serviceTimeString(serviceTime, ServiceType.YES)} ${serviceTimeString(serviceTime, ServiceType.SELECT)}`} <StopDescription/></div>;
-				} else {
-					// Assumption that we will not receive a pattern with all times set to NO
-					if([serviceTime.earlyMorning, serviceTime.rushHour, serviceTime.midday, serviceTime.evening, serviceTime.lateNights, serviceTime.weekends].some(t => t === ServiceType.YES)){
-						hasService = true;
-						return <div style={{margin: "5px 0px"}}>{BULLETS[name]()}{` ${serviceTimeString(serviceTime, ServiceType.YES)}`} <StopDescription/></div>
-					} else {
-						return ""
-					}
+			<div>{summary ?? `${bound}${type}`}</div>
+			<>
+				{showTrack && <div style={{height: "24px", margin: "5px 0px", background: "linear-gradient(to bottom, rgb(255 255 255 / 0%), rgb(255 0 153 / 0%) 4px, #E9E9E9 4px, #E9E9E9 8px, rgb(255 255 255 / 0%) 8px, rgb(255 0 153 / 0%) 16px, #E9E9E9 16px, #E9E9E9 20px, rgb(255 255 255 / 0%) 20px, rgb(255 255 255 / 0%) 24px), repeating-linear-gradient(to right, #FFFFFF, #FFFFFF 12px, #c19a6b 12px, #c19a6b 20px)"}}/>}
+				{
+					!trackDescription && Object.entries(service).toSorted(sortServiceLines).map(([key, serviceTimeStops]) => {
+						const {service: serviceName, stops, direction: entryDirection, serviceTime} = serviceTimeStops;
+						const stopDescription = () => stops ? <NextLastStops serviceTimeStops={serviceTimeStops} psName={psName} select={select}/> : " does not stop here"
+						if(select){
+							hasService = true;
+							return <div key={key} style={{margin: "5px 0px"}}>{arrows[entryDirection]}{BULLETS[serviceName]()}{` ${serviceTimeString(serviceTime, ServiceTimeType.YES)} ${serviceTimeString(serviceTime, ServiceTimeType.SELECT)}`} {stopDescription()}</div>;
+						} else {
+							// Assumption that we will not receive a pattern with all times set to NO
+							if(serviceTime.hasServiceForTime([ServiceTimeComponent.ALL_TIMES], ServiceTimeType.YES)){
+								hasService = true;
+								return <div key={key} style={{margin: "5px 0px"}}>{arrows[entryDirection]}{BULLETS[serviceName]()}{` ${serviceTimeString(serviceTime, ServiceTimeType.YES)}`} {stopDescription()}</div>
+							} else {
+								return ""
+							}
+						}
+					})
 				}
-			})}
-			{!hasService && <div style={{margin: "5px 0px"}}>No regular service</div>}
+				{!hasService && <div style={{margin: "5px 0px"}}>{trackDescription || "No regular service"}</div>}
+			</>
 		</>
 	);
 }
 
 function NextLastStops({serviceTimeStops, psName, select}){
 	const {serviceTime, nextStopService, lastStopService} = serviceTimeStops;
-	const getStopRep = (service, select, nextstop) => {
-		return (
+	const getStopRep = (service, nextstop) => (
 			<span /*style={{display: "inline-flex", "flexDirection": "column"}}*/>
-				{Object.entries(service).map(([stop, time], i, serviceTimes) => (
-					<span>
+				{Object.entries(service).map(([disambiguatedName, {time, name}], i, serviceTimes) => (
+					<span key={disambiguatedName}>
 						{ 
 							(() => {
-								const base = nextstop ? (stop === "\"\"" ? "Termination track" : `Next stop ${stop}`) : `, Last stop ${stop}`;
-								if(!nextstop && stop === psName){
+								const base = nextstop ? (name === "" ? "Termination track" : `Next stop ${name}`) : `, Last stop ${name}`;
+								if(!nextstop && disambiguatedName === psName){
 									return "";
 								}
 								if(select){
 									// TODO consolidate this with above?
 									// TODO eliminate INDIVIDUAL time strings if equal to track service time?
-									return base + (serviceTimes.length > 1 /*&& !serviceTimeEqual(time, serviceTime)*/ ? `${serviceTimeString(time, ServiceType.YES)} ${serviceTimeString(time, ServiceType.SELECT)} ` : "");
+									return base + (serviceTimes.length > 1 /*&& !serviceTimeEqual(time, serviceTime)*/ ? `${serviceTimeString(time, ServiceTimeType.YES)} ${serviceTimeString(time, ServiceTimeType.SELECT)} ` : "");
 								} else {
-									return [time.earlyMorning, time.rushHour, time.midday, time.evening, time.lateNights, time.weekends].some(t => t === ServiceType.YES) ? (serviceTimes.length > 1 && !serviceTimeEqual(time, serviceTime) ? `${base} ${serviceTimeString(time, ServiceType.YES)} ` : base) : "";
+									return serviceTime.hasServiceForTime([ServiceTimeComponent.ALL_TIMES], ServiceTimeType.YES) ? (serviceTimes.length > 1 && !serviceTimeEqual(time, serviceTime) ? `${base} ${serviceTimeString(time, ServiceTimeType.YES)} ` : base) : "";
 								}
 							})()
 						}
@@ -748,54 +777,38 @@ function NextLastStops({serviceTimeStops, psName, select}){
 				))}
 			</span>
 		);
-	};
 	// TODO fix this once and for all
-	return (<span>({getStopRep(nextStopService, select, true)}{getStopRep(lastStopService, select, false)})</span>)
+	return (<span>({getStopRep(nextStopService, true)}{getStopRep(lastStopService, false)})</span>)
 }
 
 function Platform({platform}){
-	const {type, accessible, service} = platform;
-	const [serviceUp, serviceDown] = {[PlatformService.UP]: [true, false], [PlatformService.DOWN]: [false, true], [PlatformService.BOTH]: [true, true]}[service];
+	const {type, accessible, service, description} = platform;
+	const [serviceUp, serviceDown] = {[PlatformService.UP]: [true, false], [PlatformService.DOWN]: [false, true], [PlatformService.BOTH]: [true, true], [PlatformService.NONE]: [false, false]}[service];
 
 	return (
 		<div style={{"box-sizing": "content-box", height: "40px", "background-color": "#BCBCBC", "align-content": "center", "padding-left": "10px", "border-color": "#f7f443", "border-width": `${serviceUp ? "5" : "0"}px 0px ${serviceDown ? "5" : "0"}px 0px`}}>
-			{`${type} Platform${accessible ? " (accessible)" : ""}`}
+			{`${type} Platform${accessible ? " (Accessible)" : ""}${service === PlatformService.NONE ? " (Not in Service)" : ""}${description ? `, ${  description}` : ""}`}
 		</div>
 	);
 }
 
 function serviceTimeString(serviceTime, level){
-	const select = level === ServiceType.SELECT;
+	const select = level === ServiceTimeType.SELECT;
 	if(serviceTime === null){
 		return "";
 	}
-	const {earlyMorning, rushHour, midday, evening, lateNights, weekends} = serviceTime;
-	const possibleServiceTimes = {
-		"early morning": earlyMorning,
-		"rush hour": rushHour,
-		"midday": midday,
-		"evening": evening,
-		"late night": lateNights,
-		"weekend": weekends,
-	}
-	const humanReadableList = (ls) => ls.length === 1 ? ls[0] : `${ls.slice(0, ls.length - 1).join(", ")}${ls.length > 2 ? "," : ""} and ${ls[ls.length - 1]}`;
-	const getHumanReadableList = (ff, plural) => humanReadableList(Object.entries(possibleServiceTimes).filter(ff).map(([desc, el]) => `${desc}${plural ? "s" : ""}`));
-	const numberOfTimes = Object.values(possibleServiceTimes).filter(el => el === level).length;
-	if(numberOfTimes === 6){
-		return select ? "Select trips" : "All times";
-	} else if(numberOfTimes > 3){
-		return `${select ? "Select trips a" : "A"}ll times except ${getHumanReadableList(([desc, el]) => el !== level, true)}`;
-	} else if(numberOfTimes > 0){
-		return `${select ? "Select " : ""}${getHumanReadableList(([desc, el]) => el === level, !select)}${select ? " trips" : ""}`;
-	} else {
+	const shorthand = serviceTime.getShorthand(level);
+	if(Object.entries(shorthand).length === 0){
 		return "";
 	}
+	const getMessage = (message, plural) => plural ? message : (message[message.length - 1] === "s" ? message.slice(0, message.length - 1) : message);
+	const humanReadableList = (ls) => ls.length === 1 ? ls[0] : `${ls.slice(0, ls.length - 1).join(", ")}${ls.length > 2 ? "," : ""} and ${ls[ls.length - 1]}`;
+	const getHumanReadableList = (sh, plural) => humanReadableList(Object.keys(shorthand).map(desc => getMessage(desc, plural)));
+	// TODO - could have hardcoded "except" here for except late nights or except rush
+	//const useInverse = false;
+	//return `${select ? "Select trips e" : "E"}xcept ${getHumanReadableList(([desc, el]) => el !== level, true)}`;
+	return `${select ? "Select " : ""}${getHumanReadableList(shorthand, !select)}${select ? " trips" : ""}`;
 }
-
-// function showTime(serviceTime, select){
-// 	// TODO utilize
-// 	return select || [serviceTime.earlyMorning, serviceTime.rushHour, serviceTime.midday, serviceTime.evening, serviceTime.lateNights, serviceTime.weekends].some(t => t === ServiceType.YES);
-// }
 
 function TrackAttribute(attribute, name, visible, options, discrete){
 	this.attribute = attribute;
@@ -805,9 +818,15 @@ function TrackAttribute(attribute, name, visible, options, discrete){
 	// TODO absolutely need to replace this as it's confusing
 	const highlightColors = ["#a7a9ac", "#0039a6", "#ff6319", "#6cbe45", "#996633", "#fccc0a", "#ee352e", "#00933c", "#b933ad", "#00add00", "#808183"];
 	if(discrete){
-		this.colors = this.options.reduce((acc, option, index) => (acc[option] = highlightColors[typeof option === "number" ? option : index], acc), {});
+		this.colors = this.options.reduce((acc, option, index) => {
+			acc[option] = highlightColors[typeof option === "number" ? option : index];
+			return acc;
+		}, {});
 	} else {
-		this.colors = this.options.reduce((acc, [option, _], index) => (acc[option] = highlightColors[typeof option === "number" ? option : index], acc), {});
+		this.colors = this.options.reduce((acc, [option, _], index) => {
+			acc[option] = highlightColors[typeof option === "number" ? option : index];
+			return acc;
+		}, {});
 	}
 	this.getColor = (value) => {
 		if(value === null){
@@ -815,14 +834,13 @@ function TrackAttribute(attribute, name, visible, options, discrete){
 		} else if(discrete){
 			return {stroke: this.colors[value], opacity: "1"};
 		} else {
-			let index = 0;
 			for(const [option, interval] of this.options){
 				if(interval.contains(value) || option === value){
 					return {stroke: this.colors[option], opacity: "1"};
 				}
-				index += 1
 			}
 		}
+		throw new Error(`Color not found for ${attribute} ${value}`);
 	}
 }
 

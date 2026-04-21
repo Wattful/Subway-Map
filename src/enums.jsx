@@ -1,21 +1,19 @@
-import React from "react";
-
 function Enum(baseEnum) {  
 	return new Proxy(baseEnum, {
 		get(target, item) {
-			if (!baseEnum.hasOwnProperty(item)) {
+			if (!Object.hasOwn(baseEnum, item)) {
 				throw new Error(`${item} is not a member of this enum`)
 			}
 			return baseEnum[item]
 		},
 
-		set(target, item, value) {
+		set() {
 			throw new Error('Cannot add a new value to the enum')
 		}
 	})
 }
 
-const LineName = Enum({
+const Line = Enum({
 	IRT_42ND_STREET_LINE: "IRT 42nd Street Line",
 	BMT_63RD_STREET_LINE: "BMT 63rd Street Line",
 	IND_63RD_STREET_LINE: "IND 63rd Street Line",
@@ -72,6 +70,7 @@ const Service = Enum({
 	R: "R",
 	FRANKLIN_AVENUE_SHUTTLE: "S",
 	W: "W",
+	Z: "Z",
 	"42ND_STREET_SHUTTLE": "0",
 	"1": "1",
 	"2": "2",
@@ -84,8 +83,7 @@ const Service = Enum({
 	"7d": "7d",
 });
 
-// TODO change name
-const PlatformSetType = Enum({
+const StructureType = Enum({
 	UNDERGROUND: "Underground",
 	ELEVATED: "Elevated",
 	EMBANKMENT: "Embankment",
@@ -110,28 +108,19 @@ const PlatformService = Enum({
 	UP: "Up",
 	DOWN: "Down",
 	BOTH: "Both",
+	NONE: "None",
 });
 
-// InternalDirection is an arbitrary way of distinguishing which tracks go in the same and opposite directions.
-// Next corresponds to rail south by default but this can be overridden in SegmentServiceLabel
-const InternalDirection = Enum({
-	NEXT: "Next",
-	PREVIOUS: "Previous",
+const ArrowDirection = Enum({
+	RIGHT: "Right",
+	LEFT: "Left",
 	BOTH: "Both",
 });
 
 const ServiceDirection = Enum({
-	NORTH: "SNorth",
-	SOUTH: "SSouth",
-	BOTH: "SBoth",
-});
-
-// If service direction is unambiguous, use that. Otherwise, use geographic direction TODO?
-const CardinalDirection = Enum({
 	NORTH: "North",
 	SOUTH: "South",
-	EAST: "East",
-	WEST: "West",
+	BOTH: "Both",
 });
 
 const Division = Enum({
@@ -141,11 +130,11 @@ const Division = Enum({
 });
 
 const SignalingType = Enum({
-	BLOCK: "Block",
-	COMMUNICATION_BASED: "Communication-Based",
+	BLOCK: "Fixed Block",
+	COMMUNICATION_BASED: "Moving Block (CBTC)",
 });
 
-const BuiltFor = Enum({
+const Company = Enum({
 	IRT: "Interborough Rapid Transit Company",
 	BMT: "Brooklyn-Manhattan Transit Corporation",
 	IND: "Independent Subway System",
@@ -154,24 +143,56 @@ const BuiltFor = Enum({
 	MTA: "New York City Subway"
 });
 
-const ServiceType = Enum({
+const ServiceTimeComponent = Enum({
+	ALL_TIMES: "all times",
+	WEEKDAYS: "weekdays",
+	WEEKDAYS_SP: "weekdays_sp", // Secondary version of weekdays, explained in objects
+	LATE_NIGHTS: "late nights",
+	WEEKENDS: "weekends",
+	RUSH_HOURS: "rush hours",
+	MORNINGS: "mornings",
+	MIDDAYS: "middays",
+	AFTERNOONS: "afternoons",
+	EARLY_MORNINGS: "early mornings",
+	AM_RUSH: "AM rush",
+	MORNING_MIDDAYS: "morning middays", // These two are a little confusing and shouldn't be shown to the user
+	AFTERNOON_MIDDAYS: "afternoon middays",
+	PM_RUSH: "PM rush",
+	EVENINGS: "evenings",
+	EARLY_EVENINGS: "early evenings",
+	LATE_EVENINGS: "late evenings",
+
+	ALL_TIMES_EXCEPT_LATE_NIGHTS: "except late nights",
+	ALL_TIMES_EXCEPT_AM_RUSH: "except AM rush",
+	ALL_TIMES_EXCEPT_PM_RUSH: "except PM rush",
+	ALL_TIMES_EXCEPT_MORNINGS: "except mornings",
+	ALL_TIMES_EXCEPT_AFTERNOONS: "except afternoons",
+	ALL_TIMES_EXCEPT_AM_RUSH_AND_LATE_NIGHTS: "except AM rush and late nights",
+	ALL_TIMES_EXCEPT_PM_RUSH_AND_LATE_NIGHTS: "except PM rush and late nights",
+	WEEKDAYS_EXCEPT_AM_RUSH: "weekdays except AM rush",
+	WEEKDAYS_EXCEPT_PM_RUSH: "weekdays except PM rush",
+	WEEKDAYS_EXCEPT_LATE_EVENINGS: "weekdays except late evenings",
+});
+
+// Numbers used for gt/lt comparisons
+const ServiceTimeType = Enum({
 	NO: 0,
 	SELECT: 1,
 	YES: 2,
-})
+});
 
 export {
-	LineName,
+	Line,
 	Service,
-	PlatformSetType,
+	StructureType,
 	TrackType,
 	PlatformType,
 	PlatformService,
-	InternalDirection,
+	ArrowDirection,
 	ServiceDirection,
-	CardinalDirection,
 	Division,
 	SignalingType,
-	BuiltFor,
-	ServiceType,
+	Company,
+	ServiceTimeComponent,
+	ServiceTimeType,
 }
