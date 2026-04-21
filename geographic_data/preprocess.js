@@ -1,6 +1,6 @@
-import shorelineData from "./shoreline_raw.json" with { type: "json" };
-import trackData from "./track_raw.json" with { type: "json" };
-import stationsData from "./stations_raw.json" with { type: "json" };
+import shorelineData from "./shoreline_raw.json" with {type: "json"};
+import trackData from "./track_raw.json" with {type: "json"};
+import stationsData from "./stations_raw.json" with {type: "json"};
 import fs from "fs";
 import {forEachCoord} from "./util.js";
 
@@ -56,63 +56,68 @@ const {features: stationsFeatures, ...stationsAttrs} = stationsData;
 let stationsOutputFeatures = [];
 
 // Remove Staten Island
-const shX = -8240000
-const tX = -8245000
+const shX = -8240000;
+const tX = -8245000;
 
 forEachCoord(shorelineFeatures, (x, y, feature) => {
-	if(x > shX){
-		shorelineOutputFeatures = [...shorelineOutputFeatures, feature];
-		return true;
-	}
-	return false;
+    if (x > shX) {
+        shorelineOutputFeatures = [...shorelineOutputFeatures, feature];
+        return true;
+    }
+    return false;
 });
 
 forEachCoord(trackFeatures, (x, y, feature) => {
-	if(x > tX){
-		trackOutputFeatures = [...trackOutputFeatures, feature];
-		return true;
-	}
-	return false;
+    if (x > tX) {
+        trackOutputFeatures = [...trackOutputFeatures, feature];
+        return true;
+    }
+    return false;
 });
 
 forEachCoord(stationsFeatures, (x, y, feature) => {
-	if(x > tX){
-		stationsOutputFeatures = [...stationsOutputFeatures, feature];
-		return true;
-	}
-	return false;
+    if (x > tX) {
+        stationsOutputFeatures = [...stationsOutputFeatures, feature];
+        return true;
+    }
+    return false;
 });
 
 // Rename relevant data and discard irrelevant data
 trackOutputFeatures = trackOutputFeatures.map(({type, properties, geometry}) => {
-	const {SEGMENTID: id, ROW_TYPE: tracktype} = properties;
-	return {type, properties: {
-		id,
-		tracktype: {
-			1: "Underground",
-			2: "Elevated",
-			3: "At-Grade",
-			4: {
-				353831: "Elevated",
-				8107744: "Elevated",
-				8103031: "At-Grade",
-				8103028: "At-Grade",
-				263022: "At-Grade",
-				324328: "At-Grade",
-				8103639: "At-Grade",
-				8103638: "At-Grade",
-			}[id] ?? "Open Cut",
-			5: "Open Cut",
-			6: "Embankment",
-			7: "Elevated",
-			8: "Underground",
-		}[tracktype],
-	}, geometry};
+    const {SEGMENTID: id, ROW_TYPE: tracktype} = properties;
+    return {
+        type,
+        properties: {
+            id,
+            tracktype: {
+                1: "Underground",
+                2: "Elevated",
+                3: "At-Grade",
+                4:
+                    {
+                        353831: "Elevated",
+                        8107744: "Elevated",
+                        8103031: "At-Grade",
+                        8103028: "At-Grade",
+                        263022: "At-Grade",
+                        324328: "At-Grade",
+                        8103639: "At-Grade",
+                        8103638: "At-Grade",
+                    }[id] ?? "Open Cut",
+                5: "Open Cut",
+                6: "Embankment",
+                7: "Elevated",
+                8: "Underground",
+            }[tracktype],
+        },
+        geometry,
+    };
 });
 
 stationsOutputFeatures = stationsOutputFeatures.map(({type, properties, geometry}) => {
-	const {SUBWAYSTAT: id} = properties;
-	return {type, properties: {id}, geometry};
+    const {SUBWAYSTAT: id} = properties;
+    return {type, properties: {id}, geometry};
 });
 
 /* 
@@ -123,7 +128,7 @@ Invariants:
 */
 
 const createFillerSegment = (vertex1, vertex2, newSegmentID, properties) => {
-	trackOutputFeatures.push({type: "Feature", properties: {id: newSegmentID, ...properties}, geometry: {type: "LineString", coordinates: [vertex1, vertex2]}});
+    trackOutputFeatures.push({type: "Feature", properties: {id: newSegmentID, ...properties}, geometry: {type: "LineString", coordinates: [vertex1, vertex2]}});
 };
 
 // TODO Need to add south ferry 1 station
@@ -138,166 +143,172 @@ trackOutputFeatures = trackOutputFeatures.filter((segment) => !segmentsToExclude
 
 const vertexToIdMap = {};
 forEachCoord(trackOutputFeatures, (x, y, feature, end) => {
-	if(end){
-		if(vertexToIdMap[`${x},${y}`] === undefined){
-			vertexToIdMap[`${x},${y}`] = {ids: [feature.properties.id], resolved: false};
-		} else {
-			vertexToIdMap[`${x},${y}`].ids.push(feature.properties.id);
-		}
-	}
+    if (end) {
+        if (vertexToIdMap[`${x},${y}`] === undefined) {
+            vertexToIdMap[`${x},${y}`] = {ids: [feature.properties.id], resolved: false};
+        } else {
+            vertexToIdMap[`${x},${y}`].ids.push(feature.properties.id);
+        }
+    }
 });
 
-const filteredVertexMap = Object.fromEntries(Object.entries(vertexToIdMap).filter(([_, obj]) => obj.ids.length === 1 || !obj.ids.every(v => v === obj.ids[0])));
+const filteredVertexMap = Object.fromEntries(
+    Object.entries(vertexToIdMap).filter(([_, obj]) => obj.ids.length === 1 || !obj.ids.every((v) => v === obj.ids[0])),
+);
 const idToVerticesMap = Object.entries(filteredVertexMap).reduce((acc, [vertex, {ids}]) => {
-	for(const id of ids){
-		if(acc[id] === undefined){
-			acc[id] = [vertex];
-		} else {
-			acc[id].push(vertex);
-		}
-	}
-	return acc;
+    for (const id of ids) {
+        if (acc[id] === undefined) {
+            acc[id] = [vertex];
+        } else {
+            acc[id].push(vertex);
+        }
+    }
+    return acc;
 }, {});
 
-const segmentIdMap = trackOutputFeatures.reduce((acc, val) => {acc[val.properties.id] = val; return acc}, {});
+const segmentIdMap = trackOutputFeatures.reduce((acc, val) => {
+    acc[val.properties.id] = val;
+    return acc;
+}, {});
 
 const assign = (segment1ID, segment2ID) => {
-	const segment = segmentIdMap[segment1ID];
-	if(segment.properties.start === undefined){
-		segment.properties.start = [segment2ID];
-	} else if(segment.end === undefined){
-		segment.properties.end = [segment2ID];
-	} else {
-		throw new Error(`Segment ${segment1ID} has both end slots filled`);
-	}
-}
+    const segment = segmentIdMap[segment1ID];
+    if (segment.properties.start === undefined) {
+        segment.properties.start = [segment2ID];
+    } else if (segment.end === undefined) {
+        segment.properties.end = [segment2ID];
+    } else {
+        throw new Error(`Segment ${segment1ID} has both end slots filled`);
+    }
+};
 const doubleAssign = (segment1ID, segment2ID) => {
-	assign(segment1ID, segment2ID);
-	assign(segment2ID, segment1ID);
-}
+    assign(segment1ID, segment2ID);
+    assign(segment2ID, segment1ID);
+};
 const assignJunction = (segment1ID, segment2ID, segment3ID) => {
-	assign(segment2ID, segment1ID);
-	assign(segment3ID, segment1ID);
-	const segment = segmentIdMap[segment1ID];
-	if(segment.properties.start === undefined){
-		segment.properties.start = [segment2ID, segment3ID];
-	} else if(segment.end === undefined){
-		segment.properties.end = [segment2ID, segment3ID];
-	} else {
-		throw new Error(`Segment ${segment1ID} has both end slots filled`);
-	}
-}
+    assign(segment2ID, segment1ID);
+    assign(segment3ID, segment1ID);
+    const segment = segmentIdMap[segment1ID];
+    if (segment.properties.start === undefined) {
+        segment.properties.start = [segment2ID, segment3ID];
+    } else if (segment.end === undefined) {
+        segment.properties.end = [segment2ID, segment3ID];
+    } else {
+        throw new Error(`Segment ${segment1ID} has both end slots filled`);
+    }
+};
 const assignPartialJunction = (segment1ID, segment2ID, segment3ID) => {
-	assign(segment1ID, segment2ID);
-	const segment = segmentIdMap[segment2ID];
-	if(segment.properties.start?.[0] === segment3ID){
-		segment.properties.start.push(segment1ID);
-	} else if(segment.properties.end?.[0] === segment3ID){
-		segment.properties.end.push(segment1ID);
-	} else {
-		throw new Error(`Segment ${segment2ID} not mapped to segment ${segment3ID}`);
-	}
-}
+    assign(segment1ID, segment2ID);
+    const segment = segmentIdMap[segment2ID];
+    if (segment.properties.start?.[0] === segment3ID) {
+        segment.properties.start.push(segment1ID);
+    } else if (segment.properties.end?.[0] === segment3ID) {
+        segment.properties.end.push(segment1ID);
+    } else {
+        throw new Error(`Segment ${segment2ID} not mapped to segment ${segment3ID}`);
+    }
+};
 const assignBigJunction = (segment1ID, segmentIDs) => {
-	for(const segmentID of segmentIDs){
-		assign(segmentID, segment1ID);
-	}
-	const segment = segmentIdMap[segment1ID];
-	if(segment.properties.start === undefined){
-		segment.properties.start = segmentIDs;
-	} else if(segment.end === undefined){
-		segment.properties.end = segmentIDs;
-	} else {
-		throw new Error(`Segment ${segment1ID} has both end slots filled`);
-	}
-}
+    for (const segmentID of segmentIDs) {
+        assign(segmentID, segment1ID);
+    }
+    const segment = segmentIdMap[segment1ID];
+    if (segment.properties.start === undefined) {
+        segment.properties.start = segmentIDs;
+    } else if (segment.end === undefined) {
+        segment.properties.end = segmentIDs;
+    } else {
+        throw new Error(`Segment ${segment1ID} has both end slots filled`);
+    }
+};
 
 const markDeadEndResolved = (id) => {
-	const vertices = idToVerticesMap[id];
-	for(const vertex of vertices){
-		const vertexData = filteredVertexMap[vertex];
-		if(vertexData.ids.length === 1 && !vertexData.resolved){
-			vertexData.resolved = true;
-			return;
-		}
-	}
-	console.log(`WARNING: No unresolved dead end found for ${id}`);
-}
+    const vertices = idToVerticesMap[id];
+    for (const vertex of vertices) {
+        const vertexData = filteredVertexMap[vertex];
+        if (vertexData.ids.length === 1 && !vertexData.resolved) {
+            vertexData.resolved = true;
+            return;
+        }
+    }
+    console.log(`WARNING: No unresolved dead end found for ${id}`);
+};
 
 const markCommonVertexResolved = (ids) => {
-	let vertices = new Set(idToVerticesMap[ids[0]]);
-	for(const id of ids){
-		vertices = vertices.intersection(new Set(idToVerticesMap[id]));
-	}
-	if(vertices.size === 0){
-		console.log(`WARNING: No common vertex found for ${ids}`);
-		return;
-	}
-	const vertex = vertices.values().next().value;
-	if(!filteredVertexMap[vertex].ids.length === ids.length){
-		console.log(`WARNING: ${filteredVertexMap[vertex].ids} is superset of ${ids}`);
-	}
-	filteredVertexMap[vertex].resolved = true;
-}
+    let vertices = new Set(idToVerticesMap[ids[0]]);
+    for (const id of ids) {
+        vertices = vertices.intersection(new Set(idToVerticesMap[id]));
+    }
+    if (vertices.size === 0) {
+        console.log(`WARNING: No common vertex found for ${ids}`);
+        return;
+    }
+    const vertex = vertices.values().next().value;
+    if (!filteredVertexMap[vertex].ids.length === ids.length) {
+        console.log(`WARNING: ${filteredVertexMap[vertex].ids} is superset of ${ids}`);
+    }
+    filteredVertexMap[vertex].resolved = true;
+};
 
 const assignAndMarkDeadEndResolved = (segment1ID, segment2ID) => {
-	doubleAssign(segment1ID, segment2ID);
-	markDeadEndResolved(segment1ID);
-	markDeadEndResolved(segment2ID);
-}
+    doubleAssign(segment1ID, segment2ID);
+    markDeadEndResolved(segment1ID);
+    markDeadEndResolved(segment2ID);
+};
 
 const assignAndMarkJunctionResolved = (segment1ID, segment2ID, segment3ID) => {
-	assignJunction(segment1ID, segment2ID, segment3ID);
-	markCommonVertexResolved([segment1ID, segment2ID, segment3ID]);
-}
+    assignJunction(segment1ID, segment2ID, segment3ID);
+    markCommonVertexResolved([segment1ID, segment2ID, segment3ID]);
+};
 
 const doubleDoubleAssignAndMarkResolved = (segment1ID, segment2ID, segment3ID, segment4ID) => {
-	doubleAssign(segment1ID, segment2ID);
-	doubleAssign(segment3ID, segment4ID);
-	markCommonVertexResolved([segment1ID, segment2ID, segment3ID, segment4ID]);
-}
+    doubleAssign(segment1ID, segment2ID);
+    doubleAssign(segment3ID, segment4ID);
+    markCommonVertexResolved([segment1ID, segment2ID, segment3ID, segment4ID]);
+};
 
 const assignAndMarkBigJunctionResolved = (segment1ID, segmentIDs) => {
-	assignBigJunction(segment1ID, segmentIDs);
-	markCommonVertexResolved([segment1ID, ...segmentIDs]);
-}
+    assignBigJunction(segment1ID, segmentIDs);
+    markCommonVertexResolved([segment1ID, ...segmentIDs]);
+};
 
 const assignAndMarkPartialJunctionResolved = (segment1ID, segment2ID, segment3ID) => {
-	assignPartialJunction(segment1ID, segment2ID, segment3ID);
-	markDeadEndResolved(segment1ID);
-}
+    assignPartialJunction(segment1ID, segment2ID, segment3ID);
+    markDeadEndResolved(segment1ID);
+};
 
-
-for(const vertex of Object.values(filteredVertexMap).filter((obj) => obj.ids.length === 2)){
-	const {ids: [segment1ID, segment2ID]} = vertex;
-	vertex.resolved = true;
-	doubleAssign(segment1ID, segment2ID);
+for (const vertex of Object.values(filteredVertexMap).filter((obj) => obj.ids.length === 2)) {
+    const {
+        ids: [segment1ID, segment2ID],
+    } = vertex;
+    vertex.resolved = true;
+    doubleAssign(segment1ID, segment2ID);
 }
 
 const deadEnds = new Set([
-	255655, // Broadway-Seventh Avenue line north end
-	263022, // Lenox Avenue line north end
-	286799, // Flushing line south end
-	304860, // Second Avenue line north end
-	312285, // Pelham line north end
-	8100261, // Flushing line north end
-	8101776, // Fourth Avenue line south end
-	8102639, // Nostrand Avenue line south end
-	8102672, // Fulton Street line south end
-	8102840, // Archer Avenue lines north end
-	8103127, // Franklin Avenue line north end
-	8103206, // Astoria line north end
-	8103225, // Queens Boulevard line north end
-	8103568, // White Plains Road line north end
-	8103592, // Dyre Avenue line north end
-	8103732, // Eighth Avenue line north end
-	8103772, // Jerome Avenue line north end
-	8104026, // Myrtle Avenue line north end
-	8104309, // Concourse line north end
-	8106938, // New Lots line south end
-	8107783, // Canarsie line south end
-	8107793, // Rockaway line west end
-	8107805, // Rockaway line east end
+    255655, // Broadway-Seventh Avenue line north end
+    263022, // Lenox Avenue line north end
+    286799, // Flushing line south end
+    304860, // Second Avenue line north end
+    312285, // Pelham line north end
+    8100261, // Flushing line north end
+    8101776, // Fourth Avenue line south end
+    8102639, // Nostrand Avenue line south end
+    8102672, // Fulton Street line south end
+    8102840, // Archer Avenue lines north end
+    8103127, // Franklin Avenue line north end
+    8103206, // Astoria line north end
+    8103225, // Queens Boulevard line north end
+    8103568, // White Plains Road line north end
+    8103592, // Dyre Avenue line north end
+    8103732, // Eighth Avenue line north end
+    8103772, // Jerome Avenue line north end
+    8104026, // Myrtle Avenue line north end
+    8104309, // Concourse line north end
+    8106938, // New Lots line south end
+    8107783, // Canarsie line south end
+    8107793, // Rockaway line west end
+    8107805, // Rockaway line east end
 ]);
 
 deadEnds.forEach((segmentID) => markDeadEndResolved(segmentID));
@@ -370,7 +381,6 @@ assignAndMarkJunctionResolved(8102314, 8103172, 8101798); // Astoria Queens blvd
 assignAndMarkJunctionResolved(8102314, 8103249, 348670); // 63rd st Queens blvd Astoria lines (same as above)
 assignAndMarkJunctionResolved(8104073, 8103229, 8103236); // Astoria Queens blvd lines (same as above)
 assignAndMarkJunctionResolved(244195, 244203, 8102806); // Eastern pkwy line
-
 
 // Tracks crossing over without junction
 doubleDoubleAssignAndMarkResolved(8103506, 330762, 8100390, 8103504); // Lexington av Broadway lines
@@ -459,12 +469,16 @@ assignAndMarkPartialJunctionResolved(8104111, 8104112, 8102522); // Queens blvd 
 assignAndMarkPartialJunctionResolved(8102770, 8102741, 8102771); // 4th av brighton lines
 
 const unresolvedVertexMap = Object.values(filteredVertexMap).filter((obj) => !obj.resolved);
-if(unresolvedVertexMap.length > 0){
-	console.log(`WARNING: ${unresolvedVertexMap.length} unresolved track vertices`);
+if (unresolvedVertexMap.length > 0) {
+    console.log(`WARNING: ${unresolvedVertexMap.length} unresolved track vertices`);
 }
-const unfilledTracks = trackOutputFeatures.filter((feature => (feature.properties.start === undefined && feature.properties.end === undefined) || ((feature.properties.start === undefined || feature.properties.end === undefined) && !deadEnds.has(feature.properties.id))));
-if(unfilledTracks.length > 0){
-	console.log(`WARNING: ${unfilledTracks.length} non-dead end tracks without both ends filled`);
+const unfilledTracks = trackOutputFeatures.filter(
+    (feature) =>
+        (feature.properties.start === undefined && feature.properties.end === undefined) ||
+        ((feature.properties.start === undefined || feature.properties.end === undefined) && !deadEnds.has(feature.properties.id)),
+);
+if (unfilledTracks.length > 0) {
+    console.log(`WARNING: ${unfilledTracks.length} non-dead end tracks without both ends filled`);
 }
 
 const shorelineOutput = {...shorelineAttrs, features: shorelineOutputFeatures};
