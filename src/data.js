@@ -1360,6 +1360,14 @@ const PLATFORM_SETS = Object.entries(STATIONS).reduce((acc, [stationKey, station
         platformSet.lines = [...new Set(platformSet.tracks.map((track) => track.line))];
         platformSet.stationKey = stationKey;
     }
+    const getAverage = (key) =>
+        Object.values(station.platformSets)
+            .map((ps) => ps.coordinates[key])
+            .reduce((acc2, i) => acc2 + i, 0) / Object.values(station.platformSets).length;
+    station.coordinates = {
+        x: getAverage("x"),
+        y: getAverage("y"),
+    };
     return {...acc, ...station.platformSets};
 }, {});
 

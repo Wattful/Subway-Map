@@ -1,11 +1,14 @@
 import React, {useState, useEffect, useMemo, useCallback} from "react";
 import {BrowserRouter, Route, Routes, useSearchParams} from "react-router-dom";
 import {DateTime, Interval} from "luxon";
+import styled from "styled-components";
+
 import {SERVICES, STATIONS, PLATFORM_SETS, MIN_BOARDINGS, MAX_RANK} from "./data.js";
 import {BULLETS} from "./bullets.jsx";
 import {TRACK_SEGMENTS} from "./tsdata.js";
 import {ServiceTimeType, StructureType, TrackType, PlatformService, ArrowDirection, Division, SignalingType, Company, ServiceTimeComponent} from "./enums.js";
 import {serviceTimeEqual, getDisambiguatedName as gdn} from "./objects.js";
+import {AbsolutePositioned, Sized, Fonted, FlexItem, FlexContainer} from "./styles.js";
 
 // Misc TODO
 // Add spinner
@@ -52,6 +55,11 @@ const useMousePosition = () => {
     return mousePosition;
 };
 
+const FocusContainer = styled(AbsolutePositioned)`
+    overflow-y: scroll;
+    background-color: #ffffff;
+`;
+
 const BACKGROUND_SRC = require("./shoreline.png");
 
 const trackAttributesBase = [
@@ -64,6 +72,7 @@ const trackAttributesBase = [
         true,
         [
             // TODO encode this data somewhere else? Could use single dates to avoid duplication
+            // Start: >=, end: <
             ["Before 1900", Interval.fromDateTimes(DateTime.fromObject({year: 1, month: 1, day: 1}), DateTime.fromObject({year: 1900, month: 1, day: 1}))],
             ["1900 - 1909", Interval.fromDateTimes(DateTime.fromObject({year: 1900, month: 1, day: 1}), DateTime.fromObject({year: 1910, month: 1, day: 1}))],
             ["1910 - 1919", Interval.fromDateTimes(DateTime.fromObject({year: 1910, month: 1, day: 1}), DateTime.fromObject({year: 1920, month: 1, day: 1}))],
@@ -78,7 +87,7 @@ const trackAttributesBase = [
             ],
         ],
         false,
-    ), // Start: >=, end: <
+    ),
     new TrackAttribute("obf", "Originally Built For", true, Object.values(Company), true),
     new TrackAttribute("type", "Track Type", true, Object.values(StructureType), true),
     new TrackAttribute("division", "Division", true, Object.values(Division), true),
@@ -89,10 +98,27 @@ const TRACK_ATTRIBUTES = Object.fromEntries(trackAttributesBase.map((attr) => [a
 const TRACK_ATTRIBUTES_NAME_MAP = Object.fromEntries(trackAttributesBase.map((attr) => [attr.name, attr]));
 
 const PS_COLORS = {
-    Stop: "#fffb00",
-    "Skipped Stop": "#ff0000",
-    null: "#ffffff",
+    true: "#fffb00", // Stops
+    false: "#ff0000", // Does not stop
+    undefined: "#ffffff", // Does not run through
 };
+
+// Ad hoc styled componenets (TODO consider moving to styles.js)
+const MenuButton = styled(Sized)`
+    border: 0.5px solid;
+`;
+
+const MainSvg = styled(Sized)`
+    cursor: ${(props) => props.cursor};
+`;
+
+const MainSpan = styled(FlexContainer)`
+    flex-direction: column;
+    overflow: hidden;
+    height: 100vh;
+    align-items: center;
+    justify-content: center;
+`;
 
 function Subway({}) {
     return (
@@ -126,7 +152,7 @@ function SubwayMap({}) {
             ? parseInt(searchParams.get("pattern"))
             : null;
     const platformSet = searchParams.get("ps") === null ? null : searchParams.get("ps"); // TODO extra validation
-    const [psHover, setPsHover] = useState(null);
+    const [psHover, setPsHover] = useState([null, false]);
     const [serviceHover, setServiceHover] = useState(null);
     const [patternHover, setPatternHover] = useState(null);
     const [lineHover, setLineHover] = useState(null);
@@ -278,9 +304,13 @@ function SubwayMap({}) {
         }, stops);
     }
 
+    const menuPadding = {plr: "8px"};
+    const menuMargin = {mr: "8px"};
+
     return (
-        <span style={{display: "flex", "flex-direction": "column", overflow: "hidden", height: "100vh", "align-items": "center", "justify-content": "center"}}>
-            <svg
+        <MainSpan flexDirection="row" alignItems="center" justifyContent="center">
+            <MainSvg
+                as="svg"
                 xmlns="http://www.w3.org/2000/svg"
                 xmlnsXlink="http://www.w3.org/1999/xlink"
                 xmlSpace="preserve"
@@ -296,14 +326,11 @@ function SubwayMap({}) {
                     setBaseTranslate({...translate});
                     setStartDragPosition(null);
                 }}
-                style={{
-                    cursor: startDragPosition ? "grabbing" : "grab",
-                    width: "100vw",
-                    height: "100vh",
-                    "min-width": `${svgDimensions.x}px`,
-                    "min-height": `${svgDimensions.y}px`,
-                }}
-                /*style={{"flex": "0 0 auto", "z-index": "0"}}*/
+                cursor={startDragPosition ? "grabbing" : "grab"}
+                w="100vw"
+                h="100vh"
+                mw={`${svgDimensions.x}px`}
+                mh={`${svgDimensions.y}px`}
             >
                 <g transform={`matrix(${zoom} 0 0 ${zoom} ${translate.x} ${translate.y})`}>
                     <image x="0" y="0" width="100%" xlinkHref={BACKGROUND_SRC} />
@@ -322,73 +349,105 @@ function SubwayMap({}) {
                                 setLineHover={(tr) => setLineHover(tr ? segment.lines[0] : null)}
                             />
                         ))}
-                    {Object.entries(PLATFORM_SETS).map(([identifier, ps]) => (
-                        <PlatformSetDot
-                            key={identifier}
-                            platformSet={ps}
-                            colors={PS_COLORS}
-                            baseSize={svgDimensions.y / 275}
-                            scale={scale}
-                            stops={Object.keys(stops).length > 0 ? stops : null}
-                            setPsHover={(tr) => setPsHover(tr ? identifier : null)}
-                            setFocus={() => {
-                                const doubleclick = setFocus("ps", identifier === platformSet)(ps.stationKey);
-                                updateSearchParams(setSearchParams, "ps", doubleclick ? null : identifier);
-                            }}
-                        />
-                    ))}
+                    {Object.entries(STATIONS).reduce((acc, [identifier, station]) => {
+                        const baseSize = svgDimensions.y / 275;
+                        const scaleBaseSize = baseSize / 3;
+                        const size = scale ? Math.sqrt(station.boardings / MIN_BOARDINGS) * scaleBaseSize : baseSize;
+                        if (scale) {
+                            // TODO updated conditions - something related to zoom and closeness of dots
+                            const {coordinates} = station;
+                            // Iterate through the platform sets, take the first value which is not undefined. We should never see more than one defined value here.
+                            const fill =
+                                PS_COLORS[
+                                    stops === null
+                                        ? undefined
+                                        : Object.keys(station.platformSets)
+                                              .map((psIdentifier) => stops[psIdentifier])
+                                              .reduce((acc2, f) => (acc2 === undefined ? f : acc2), undefined)
+                                ];
+                            const onClickPs = Object.keys(station.platformSets)[0];
+                            acc.push(
+                                <MapDot
+                                    key={identifier}
+                                    fill={fill}
+                                    size={size}
+                                    coordinates={coordinates}
+                                    setPsHover={(tr) => setPsHover([tr ? identifier : null, true])}
+                                    setFocus={() => {
+                                        const doubleclick = setFocus("ps", onClickPs === platformSet)(identifier);
+                                        updateSearchParams(setSearchParams, "ps", doubleclick ? null : onClickPs);
+                                    }}
+                                />,
+                            );
+                        } else {
+                            for (const [psIdentifier, ps] of Object.entries(station.platformSets)) {
+                                const {coordinates} = ps;
+                                const fill = stops === null ? PS_COLORS.undefined : PS_COLORS[stops[psIdentifier]];
+                                acc.push(
+                                    <MapDot
+                                        key={psIdentifier}
+                                        fill={fill}
+                                        size={size}
+                                        coordinates={coordinates}
+                                        setPsHover={(tr) => setPsHover([tr ? psIdentifier : null, false])}
+                                        setFocus={() => {
+                                            const doubleclick = setFocus("ps", psIdentifier === platformSet)(identifier);
+                                            updateSearchParams(setSearchParams, "ps", doubleclick ? null : psIdentifier);
+                                        }}
+                                    />,
+                                );
+                            }
+                        }
+                        return acc;
+                    }, [])}
                 </g>
-            </svg>
-            {psHover &&
+            </MainSvg>
+            {psHover[0] &&
                 (() => {
-                    const {x, y} = svgCoordsToAbsoluteCoords(PLATFORM_SETS[psHover].coordinates);
+                    const [identifier, isStation] = psHover;
+                    const hovered = (isStation ? STATIONS : PLATFORM_SETS)[identifier];
+                    const onClickPs = isStation ? Object.keys(hovered)[0] : identifier;
+                    const {name, coordinates} = hovered;
+                    const {x, y} = svgCoordsToAbsoluteCoords(coordinates);
+                    const bullets = getBullets(isStation ? Object.values(hovered.platformSets) : [hovered], select);
                     return (
                         // TODO scale translation when station dots are scaled
-                        <span style={{position: "absolute", left: x, top: y, transform: `translate(-50%, ${zoom * 20}px)`}}>
+                        <AbsolutePositioned left={`${x}px`} top={`${y}px`} transform={`translate(-50%, ${zoom * 20}px)`}>
                             <PlatformSetPreview
-                                platformSet={PLATFORM_SETS[psHover]}
-                                select={select}
-                                setPsHover={(tr) => setPsHover(tr ? psHover : null)}
+                                name={name}
+                                bullets={bullets}
+                                setPsHover={(tr) => setPsHover([tr ? identifier : null, isStation])}
                                 setFocus={() => {
-                                    const doubleclick = setFocus("ps", true)(psHover);
-                                    updateSearchParams(
-                                        setSearchParams,
-                                        "ps",
-                                        doubleclick ? null : gdn(PLATFORM_SETS[psHover].name, PLATFORM_SETS[psHover].disambiguator),
-                                    );
+                                    const doubleclick = setFocus("ps", true)(onClickPs);
+                                    updateSearchParams(setSearchParams, "ps", doubleclick ? null : onClickPs);
                                 }}
                             />
-                        </span>
+                        </AbsolutePositioned>
                     );
                 })()}
             {/* TODO save mouse position when start hovering then don't move*/}
             {lineHover && (
-                //<span style={{position: "absolute", left: 0, top: 0}}>
-                <span style={{position: "absolute", left: mousePosition.x, top: mousePosition.y, transform: "translate(-50%, 10%)"}}>
+                <AbsolutePositioned left={`${mousePosition.x}px`} top={`${mousePosition.y}px`} transform="translate(-50%, 10%)">
                     <LinePreview line={lineHover} select={select} />
-                </span>
+                </AbsolutePositioned>
             )}
-            <span
-                style={{
-                    position: "absolute",
-                    top: "0px",
-                    left: "0px",
-                }} /*style={{"flex": "0 0 auto", "display": "flex", "flexDirection": "column", margin: "0px 80px 0px 25px"}}*/
-            >
+            <AbsolutePositioned left="0px" top="0px">
                 <span>
                     <span>
-                        <button style={{border: "0.5px solid", padding: "0 8px", "margin-right": "8px"}} onClick={() => updateZoom(1, true)}>
+                        <MenuButton as="button" {...menuMargin} {...menuPadding} onClick={() => updateZoom(1, true)}>
                             +
-                        </button>
-                        <button style={{border: "0.5px solid", padding: "0 8px", "margin-right": "8px"}} onClick={reset}>
+                        </MenuButton>
+                        <MenuButton as="button" {...menuMargin} {...menuPadding} onClick={reset}>
                             Reset
-                        </button>
-                        <button style={{border: "0.5px solid", padding: "0 8px"}} onClick={() => updateZoom(-1, true)}>
+                        </MenuButton>
+                        <MenuButton as="button" {...menuPadding} onClick={() => updateZoom(-1, true)}>
                             -
-                        </button>
+                        </MenuButton>
                     </span>
                     <br />
-                    <label style={{"margin-right": "8px"}}>Show Select Service?</label>
+                    <Sized as="label" {...menuMargin}>
+                        Show Select Service?
+                    </Sized>
                     <input
                         type="checkbox"
                         checked={select}
@@ -397,7 +456,9 @@ function SubwayMap({}) {
                         }}
                     />
                     <br />
-                    <label style={{"margin-right": "8px"}}>Scale Stations by Boardings?</label>
+                    <Sized as="label" {...menuMargin}>
+                        Scale Stations by Boardings?
+                    </Sized>
                     <input
                         type="checkbox"
                         checked={scale}
@@ -406,7 +467,9 @@ function SubwayMap({}) {
                         }}
                     />
                     <br />
-                    <label style={{"margin-right": "8px"}}>Track Highlight</label>
+                    <Sized as="label" {...menuMargin}>
+                        Track Highlight
+                    </Sized>
                     <select
                         onChange={(event) => {
                             updateSearchParams(setSearchParams, "attribute", TRACK_ATTRIBUTES_NAME_MAP?.[event.target.value]?.attribute);
@@ -421,7 +484,9 @@ function SubwayMap({}) {
                             ))}
                     </select>
                     <br />
-                    <label style={{"margin-right": "8px"}}>Station</label>
+                    <Sized as="label" {...menuMargin}>
+                        Station
+                    </Sized>
                     <select
                         onChange={(event) => {
                             if (event.target.value === "None") {
@@ -450,7 +515,9 @@ function SubwayMap({}) {
                         ))}
                     </select>
                     <br />
-                    <label style={{"margin-right": "8px"}}>Service</label>
+                    <Sized as="label" {...menuMargin}>
+                        Service
+                    </Sized>
                     <select
                         onChange={(event) => {
                             if (event.target.value === "None") {
@@ -470,28 +537,20 @@ function SubwayMap({}) {
                     <br />
                 </span>
                 {highlight && (
-                    <span style={{flex: "0 0 auto"}}>
+                    <FlexItem>
                         <TrackLegend data={highlight} setHighlightValue={setHighlightValue} />
                         <br />
                         <br />
-                    </span>
+                    </FlexItem>
                 )}
                 {pat !== null && (
-                    <span style={{flex: "0 0 auto"}}>
+                    <FlexItem>
                         <PlatformSetLegend colors={PS_COLORS} size={3.5} />
-                    </span>
+                    </FlexItem>
                 )}
-            </span>
+            </AbsolutePositioned>
             {focusValue && (
-                <span
-                    style={{
-                        position: "absolute",
-                        "overflow-y": "scroll",
-                        top: "0px",
-                        right: "0px",
-                        "background-color": "#FFFFFF",
-                    }} /*style={{"flex": "4 1 auto"}}*/
-                >
+                <FocusContainer top="0px" right="0px">
                     {focusType === "ps" && (
                         <StationFocus
                             station={STATIONS[focusValue]}
@@ -514,11 +573,15 @@ function SubwayMap({}) {
                             }}
                         />
                     )}
-                </span>
+                </FocusContainer>
             )}
-        </span>
+        </MainSpan>
     );
 }
+
+const TrackSegmentPath = styled.path`
+    cursor: default;
+`;
 
 function TrackSegmentSvg({id, d, baseWidth, attributes, highlight, hover, setLineHover}) {
     const {stroke, opacity} = highlight ? highlight.getColor(attributes[highlight.attribute]) : {stroke: "#9c9c9c", opacity: "1"};
@@ -535,7 +598,7 @@ function TrackSegmentSvg({id, d, baseWidth, attributes, highlight, hover, setLin
             highlight.getColor(highlight.highlightValue).stroke === highlight.getColor(attributes[highlight.attribute]).stroke);
     //const style = useShadow ? {filter: `drop-shadow(-${shadowSize} -${shadowSize} ${shadowColor}) drop-shadow(${shadowSize} -${shadowSize} ${shadowColor}) drop-shadow(${shadowSize} ${shadowSize} ${shadowColor}) drop-shadow(-${shadowSize} ${shadowSize} ${shadowColor})`} : {}
     return (
-        <path
+        <TrackSegmentPath
             id={`path${id}`}
             title={id}
             fill="none"
@@ -545,8 +608,6 @@ function TrackSegmentSvg({id, d, baseWidth, attributes, highlight, hover, setLin
             strokeLinejoin="round"
             strokeMiterlimit="10"
             strokeWidth={useShadow ? baseWidth * 2 : baseWidth}
-            //style={style}
-            style={{cursor: "default"}}
             d={d}
             clipPath="url(#SVGID_548_)"
             onMouseDown={(e) => {
@@ -562,32 +623,21 @@ function TrackSegmentSvg({id, d, baseWidth, attributes, highlight, hover, setLin
     );
 }
 
-//TODO could change highlight from string to bool
-function PlatformSetDot({platformSet, colors, baseSize, scale, stops, setPsHover, setFocus}) {
-    const {
-        name,
-        disambiguator,
-        coordinates: {x, y},
-    } = platformSet;
-    const scaleBaseSize = baseSize / 3;
-    const size = scale ? Math.sqrt(STATIONS[platformSet.stationKey].boardings / MIN_BOARDINGS) * scaleBaseSize : baseSize;
-    let fill;
-    if (stops === null || stops[gdn(name, disambiguator)] === undefined) {
-        fill = colors.null;
-    } else if (stops[gdn(name, disambiguator)]) {
-        // TODO directional only stop?
-        fill = colors.Stop;
-    } else {
-        // Skipped stop
-        fill = colors["Skipped Stop"];
-    }
+const DotEllipse = styled.ellipse`
+    fill: ${(props) => props.fill};
+    cursor: default;
+    stroke: rgb(0, 0, 0);
+`;
+
+function MapDot({fill, size, coordinates, setPsHover, setFocus}) {
+    const {x, y} = coordinates;
     return (
-        <ellipse
+        <DotEllipse
             cx={x}
             cy={y}
             rx={size}
             ry={size}
-            style={{fill, cursor: "default", stroke: "rgb(0, 0, 0)"}}
+            fill={fill}
             onClick={setFocus}
             onMouseDown={(e) => {
                 e.stopPropagation();
@@ -602,10 +652,18 @@ function PlatformSetDot({platformSet, colors, baseSize, scale, stops, setPsHover
     );
 }
 
+const LegendCell = styled(Sized)`
+    display: inline-block;
+`;
+
+const LegendTable = styled.table`
+    border-spacing: 10px;
+`;
+
 function Legend({name, colors, onTrMouseEnter, onTrMouseLeave, SvgChild}) {
     // TODO could include onClick
     return (
-        <table style={{"border-spacing": "10px"}}>
+        <LegendTable>
             <thead>
                 <tr>
                     <th colSpan="2">{name}</th>
@@ -626,17 +684,17 @@ function Legend({name, colors, onTrMouseEnter, onTrMouseLeave, SvgChild}) {
                         >
                             <td>
                                 {option}
-                                <span style={{display: "inline-block", width: "12px"}} />
+                                <LegendCell w="12px" />
                             </td>
                             <td>
-                                <svg xmlns="http://www.w3.org/2000/svg" width="30px" height="20px" style={{display: "inline-block"}}>
+                                <LegendCell as="svg" xmlns="http://www.w3.org/2000/svg" width="30px" height="20px">
                                     <SvgChild color={color} />
-                                </svg>
+                                </LegendCell>
                             </td>
                         </tr>
                     ))}
             </tbody>
-        </table>
+        </LegendTable>
     );
 }
 
@@ -672,8 +730,12 @@ function platformSetSvgChildWithSize(size) {
 }
 
 function PlatformSetSvgChild({color, size}) {
-    return <ellipse style={{fill: color, stroke: "rgb(0, 0, 0)"}} rx={size} ry={size} cx="50%" cy="50%" />;
+    return <DotEllipse fill={color} rx={size} ry={size} cx="50%" cy="50%" />;
 }
+
+const ServicePatternsContainer = styled.span`
+    text-indent: 50px;
+`;
 
 function ServiceFocus({servicesInformation, selected, setHover, setSelect}) {
     return (
@@ -682,7 +744,7 @@ function ServiceFocus({servicesInformation, selected, setHover, setSelect}) {
                 <>
                     {BULLETS[service]()} {subtitle}
                     <br />
-                    <span style={{"text-indent": "50px"}}>
+                    <ServicePatternsContainer>
                         {servicePatterns.map(({serviceDescription}, patternIndex) => {
                             const isSelected = selected.service === serviceIndex && selected.pattern === patternIndex;
                             const child = (
@@ -706,13 +768,29 @@ function ServiceFocus({servicesInformation, selected, setHover, setSelect}) {
                             );
                             return isSelected ? <strong>{child}</strong> : child;
                         })}
-                    </span>
+                    </ServicePatternsContainer>
                     <br />
                 </>
             ))}
         </>
     );
 }
+
+const Sign = styled.div`
+    border-top: 10px;
+    padding: 2px 10px;
+    background-color: #000000;
+    color: #ffffff;
+    font-family: Helvetica;
+    font-weight: bold;
+    border-top-style: solid;
+    border-top-color: black;
+    box-shadow: inset 0 2px white;
+`;
+
+const PsTab = styled(Fonted)`
+    padding: 10px;
+`;
 
 // TODO Fix scrolling in station window (use CSS "float" property instead of flex?)
 function StationFocus({station, psName, setPsName, select}) {
@@ -747,23 +825,13 @@ function StationFocus({station, psName, setPsName, select}) {
     }
     return (
         <>
-            <div
-                style={{
-                    "background-color": "#000000",
-                    color: "#FFFFFF",
-                    "font-family": "Helvetica",
-                    "font-weight": "bold",
-                    "border-top": "10px solid black",
-                    "box-shadow": "inset 0 2px white",
-                    padding: "2px 10px",
-                }}
-            >
+            <Sign>
                 {name}
                 <br />
                 {Array.from(bullets)
                     .toSorted()
                     .map((bullet) => BULLETS[bullet]())}
-            </div>
+            </Sign>
             {boardings.toLocaleString()} boardings (2023), {ordinal(rank)} of {MAX_RANK}
             <br />
             Opposite direction transfer: {{true: "Yes", false: "No", null: "N/A"}[odt]}
@@ -775,16 +843,16 @@ function StationFocus({station, psName, setPsName, select}) {
             ) : (
                 <>
                     {Object.values(platformSets).map((platformSet) => (
-                        <span
+                        <PsTab
                             key={gdn(platformSet.name, platformSet.disambiguator)}
-                            style={{padding: "10px", "font-weight": gdn(platformSet.name, platformSet.disambiguator) === psName ? "bold" : "normal"}}
+                            fontWeight={gdn(platformSet.name, platformSet.disambiguator) === psName ? "bold" : "normal"}
                             onClick={() => setPsName(gdn(platformSet.name, platformSet.disambiguator))}
                         >
                             {platformSet.lines
                                 .filter((lineName) => lineName !== null)
                                 .map((lineName) => lineName.slice(lineName.indexOf(" ")))
                                 .join(", ")}
-                        </span>
+                        </PsTab>
                     ))}
                     <br />
                     <Tab platformSet={platformSets[psName]} select={select} />
@@ -795,21 +863,10 @@ function StationFocus({station, psName, setPsName, select}) {
     );
 }
 
-// TODO change name to platformset, add "pointer triangle"?
-function PlatformSetPreview({platformSet, select, setPsHover, setFocus}) {
-    const {name} = platformSet;
-    const bullets = getBullets([platformSet], select);
+// TODO add "pointer triangle"?
+function PlatformSetPreview({name, bullets, setPsHover, setFocus}) {
     return (
-        <div
-            style={{
-                "background-color": "#000000",
-                color: "#FFFFFF",
-                "font-family": "Helvetica",
-                "font-weight": "bold",
-                "border-top": "10px solid black",
-                "box-shadow": "inset 0 2px white",
-                padding: "2px 10px",
-            }}
+        <Sign
             onClick={setFocus}
             onMouseDown={(e) => {
                 e.stopPropagation();
@@ -826,7 +883,7 @@ function PlatformSetPreview({platformSet, select, setPsHover, setFocus}) {
             {Array.from(bullets)
                 .toSorted()
                 .map((bullet) => BULLETS[bullet]())}
-        </div>
+        </Sign>
     );
 }
 
@@ -834,23 +891,13 @@ function LinePreview({line, select}) {
     const platformSets = Object.values(PLATFORM_SETS).filter((ps) => ps.tracks.map((el) => el.line).includes(line));
     const bullets = getBullets(platformSets, select, line);
     return (
-        <div
-            style={{
-                "background-color": "#000000",
-                color: "#FFFFFF",
-                "font-family": "Helvetica",
-                "font-weight": "bold",
-                "border-top": "10px solid black",
-                "box-shadow": "inset 0 2px white",
-                padding: "2px 10px",
-            }}
-        >
+        <Sign>
             {line}
             <br />
             {Array.from(bullets)
                 .toSorted()
                 .map((bullet) => BULLETS[bullet]())}
-        </div>
+        </Sign>
     );
 }
 
@@ -876,6 +923,21 @@ function getBullets(platformSets, select, line = null) {
     return bullets;
 }
 
+const TrackDivider = styled(Sized)`
+    border-top-width: 3px;
+    border-color: #888888;
+`;
+
+const FloorDivider = styled.hr`
+    margin-top: 20px;
+    margin-bottom: 8px;
+    height: 6px;
+    border-top-width: 2px;
+    background-color: white;
+    border-bottom-width: 2px;
+    border-color: #cccccc;
+`;
+
 function Tab({platformSet, select}) {
     const {name, type, opened, lines, layout, normal} = platformSet;
     // Ideas: render background as dark or brown color to represent the ground, render track description (ie "westbound local") to the side, by default show services lined up then expand
@@ -887,41 +949,32 @@ function Tab({platformSet, select}) {
                     {
                         layout.length > 1 && (
                             <>
-                                <span style={{"font-style": "italic"}}>
+                                <Fonted fontStyle="italic">
                                     Floor {type === StructureType.UNDERGROUND ? "B" : ""}
                                     {index + 1}
-                                </span>
+                                </Fonted>
                                 <br />
                             </>
                         ) /*TODO label floor*/
                     }
                     {floor.map((element, index2) => (
                         <>
-                            {element.category !== "Platform" && index2 === 0 && <hr style={{"border-top-width": "3px", "border-color": "#888888"}} />}
-                            <div style={{margin: "2px 0px"}}>
+                            {element.category !== "Platform" && index2 === 0 && <TrackDivider />}
+                            <Sized as="div" mtb="2px">
                                 {element.category === "Label" && <Label data={element} />}
                                 {element.category === "Track" && <Track track={element} psName={name} select={select} />}
                                 {element.category === "Platform" && <Platform platform={element} />}
                                 {element.category === "Misc" && element.description}
-                            </div>
+                            </Sized>
                             {element.category !== "Platform" && (index2 === floor.length - 1 || floor[index2 + 1].category !== "Platform") && (
-                                <hr style={{"margin-top": "6px", "border-top-width": "3px", "border-color": "#888888"}} />
+                                <TrackDivider as="hr" mt="6px" />
                             )}
                         </>
                     ))}
                     {index !== layout.length - 1 && (
                         <>
                             {/* Idea: render this as stairs? */}
-                            <hr
-                                style={{
-                                    margin: "20px 0px 8px 0px",
-                                    height: "6px",
-                                    "border-top-width": "2px",
-                                    "background-color": "white",
-                                    "border-bottom-width": "2px",
-                                    "border-color": "#CCCCCC",
-                                }}
-                            />
+                            <FloorDivider />
                         </>
                     )}
                 </>
@@ -934,12 +987,31 @@ function Label({data}) {
     const {label, type, opened} = data;
     const tostring = type || opened ? `(${type ? `${type}, ` : ""}${opened ? `Opened ${opened.toLocaleString()}` : ""})` : "";
     return (
-        <div style={{"margin-bottom": "4px"}}>
+        <Sized as="div" mb="4px">
             {" "}
-            <span style={{"font-weight": "bold"}}>{label} Platforms</span> {tostring}
-        </div>
+            <Fonted fontWeight="bold">{label} Platforms</Fonted> {tostring}
+        </Sized>
     );
 }
+
+const TrackComponent = styled.div`
+    height: 24px;
+    background:
+        linear-gradient(
+            to bottom,
+            rgb(255 255 255 / 0%),
+            rgb(255 0 153 / 0%) 4px,
+            #e9e9e9 4px,
+            #e9e9e9 8px,
+            rgb(255 255 255 / 0%) 8px,
+            rgb(255 0 153 / 0%) 16px,
+            #e9e9e9 16px,
+            #e9e9e9 20px,
+            rgb(255 255 255 / 0%) 20px,
+            rgb(255 255 255 / 0%) 24px
+        ),
+        repeating-linear-gradient(to right, #ffffff, #ffffff 12px, #c19a6b 12px, #c19a6b 20px);
+`;
 
 function Track({track, psName, select}) {
     const {type, direction, serviceDirection, service, summary, trackDescription, showTrack} = track;
@@ -963,20 +1035,12 @@ function Track({track, psName, select}) {
             return directionA === ArrowDirection.LEFT ? -1 : 1;
         }
     };
+    const margin = {mtb: "5px"};
     return (
         <>
             <div>{summary ?? `${bound}${type}`}</div>
             <>
-                {showTrack && (
-                    <div
-                        style={{
-                            height: "24px",
-                            margin: "5px 0px",
-                            background:
-                                "linear-gradient(to bottom, rgb(255 255 255 / 0%), rgb(255 0 153 / 0%) 4px, #E9E9E9 4px, #E9E9E9 8px, rgb(255 255 255 / 0%) 8px, rgb(255 0 153 / 0%) 16px, #E9E9E9 16px, #E9E9E9 20px, rgb(255 255 255 / 0%) 20px, rgb(255 255 255 / 0%) 24px), repeating-linear-gradient(to right, #FFFFFF, #FFFFFF 12px, #c19a6b 12px, #c19a6b 20px)",
-                        }}
-                    />
-                )}
+                {showTrack && <TrackComponent {...margin} />}
                 {!trackDescription &&
                     Object.entries(service)
                         .toSorted(sortServiceLines)
@@ -987,30 +1051,34 @@ function Track({track, psName, select}) {
                             if (select) {
                                 hasService = true;
                                 return (
-                                    <div key={key} style={{margin: "5px 0px"}}>
+                                    <Sized as="div" key={key} {...margin}>
                                         {arrows[entryDirection]}
                                         {BULLETS[serviceName]()}
                                         {` ${serviceTimeString(serviceTime, ServiceTimeType.YES)} ${serviceTimeString(serviceTime, ServiceTimeType.SELECT)}`}{" "}
                                         {stopDescription()}
-                                    </div>
+                                    </Sized>
                                 );
                             } else {
                                 // Assumption that we will not receive a pattern with all times set to NO
                                 if (serviceTime.hasServiceForTime([ServiceTimeComponent.ALL_TIMES], ServiceTimeType.YES)) {
                                     hasService = true;
                                     return (
-                                        <div key={key} style={{margin: "5px 0px"}}>
+                                        <Sized as="div" key={key} {...margin}>
                                             {arrows[entryDirection]}
                                             {BULLETS[serviceName]()}
                                             {` ${serviceTimeString(serviceTime, ServiceTimeType.YES)}`} {stopDescription()}
-                                        </div>
+                                        </Sized>
                                     );
                                 } else {
                                     return "";
                                 }
                             }
                         })}
-                {!hasService && <div style={{margin: "5px 0px"}}>{trackDescription || "No regular service"}</div>}
+                {!hasService && (
+                    <Sized as="div" {...margin}>
+                        {trackDescription || "No regular service"}
+                    </Sized>
+                )}
             </>
         </>
     );
@@ -1057,6 +1125,13 @@ function NextLastStops({serviceTimeStops, psName, select}) {
     );
 }
 
+const PlatformDiv = styled(Sized)`
+    box-sizing: content-box;
+    background-color: #bcbcbc;
+    align-content: center;
+    border-color: #f7f443;
+`;
+
 function Platform({platform}) {
     const {type, accessible, service, description} = platform;
     const [serviceUp, serviceDown] = {
@@ -1067,19 +1142,9 @@ function Platform({platform}) {
     }[service];
 
     return (
-        <div
-            style={{
-                "box-sizing": "content-box",
-                height: "40px",
-                "background-color": "#BCBCBC",
-                "align-content": "center",
-                "padding-left": "10px",
-                "border-color": "#f7f443",
-                "border-width": `${serviceUp ? "5" : "0"}px 0px ${serviceDown ? "5" : "0"}px 0px`,
-            }}
-        >
+        <PlatformDiv as="div" h="40px" pl="10px" bt={`${serviceUp ? "5" : "0"}px`} bb={`${serviceDown ? "5" : "0"}px`}>
             {`${type} Platform${accessible ? " (Accessible)" : ""}${service === PlatformService.NONE ? " (Not in Service)" : ""}${description ? `, ${description}` : ""}`}
-        </div>
+        </PlatformDiv>
     );
 }
 

@@ -43,6 +43,7 @@ function Station(name, disambiguator, platformSets, boardings, odt) {
     this.boardings = boardings;
     this.odt = odt;
     this.rank = null;
+    this.coordinates = null; // TOADD
 }
 
 function Label(data) {
