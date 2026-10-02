@@ -8,20 +8,7 @@ import {BULLETS} from "./bullets.jsx";
 import {TRACK_SEGMENTS} from "./tsdata.js";
 import {ServiceTimeType, StructureType, TrackType, PlatformService, ArrowDirection, Division, SignalingType, Company, ServiceTimeComponent} from "./enums.js";
 import {serviceTimeEqual, getDisambiguatedName as gdn} from "./objects.js";
-import {AbsolutePositioned, Sized, Fonted, FlexItem, FlexContainer} from "./styles.js";
-
-// Misc TODO
-// Add spinner
-// circle/highlight/border station dots
-// Better representation of scaled stations
-// Bullet ordering
-// Better color scheme
-// Fixed text and arrow representation of terminal stations
-// Multiple values for track attributes (QBL/astoria overlap)
-// Add ability to generate larger image and scale down
-
-// How 2 measure track length
-// Idea 1 - update property in TRACK_SEGMENTS on first render - works but is a bit wonky
+import {AbsolutePositioned, RelativePositioned, Sized, Fonted, FlexContainer} from "./styles.js";
 
 // https://stackoverflow.com/questions/36862334/get-viewport-window-height-in-reactjs
 const useWindowDimensions = () => {
@@ -54,11 +41,6 @@ const useMousePosition = () => {
     }, []);
     return mousePosition;
 };
-
-const FocusContainer = styled(AbsolutePositioned)`
-    overflow-y: scroll;
-    background-color: #ffffff;
-`;
 
 const BACKGROUND_SRC = require("./shoreline.png");
 
@@ -103,7 +85,6 @@ const PS_COLORS = {
     undefined: "#ffffff", // Does not run through
 };
 
-// Ad hoc styled componenets (TODO consider moving to styles.js)
 const MenuButton = styled(Sized)`
     border: 0.5px solid;
 `;
@@ -112,12 +93,48 @@ const MainSvg = styled(Sized)`
     cursor: ${(props) => props.cursor};
 `;
 
+// TODO this really shouldn't need to be a flex container, but I can't figure out why the SVG is positioned incorrectly if I disable flex.
 const MainSpan = styled(FlexContainer)`
-    flex-direction: column;
     overflow: hidden;
     height: 100vh;
     align-items: center;
     justify-content: center;
+`;
+
+const MenuContainer = styled.span`
+    position: absolute;
+    height: 100%;
+    top: 0px;
+    left: 0px;
+`;
+
+const MenuFlexContainer = styled.span`
+    display: flex;
+    height: 100%;
+    align-items: flex-start;
+`;
+
+const MenuWindowContainer = styled.span`
+    height: 100%;
+    box-shadow: 0 0 6px 0px rgba(0, 0, 0, 0.3);
+    display: flex;
+    flex-direction: column;
+`;
+
+const FocusContainer = styled.span`
+    position: absolute;
+    overflow-y: scroll;
+    height: 100%;
+    background-color: #ffffff;
+    top: 0px;
+    right: 0px;
+    display: flex;
+    align-items: flex-start;
+`;
+
+const FocusWindowContainer = styled.span`
+    height: 100%;
+    box-shadow: 0 0 6px 0px rgba(0, 0, 0, 0.3);
 `;
 
 function Subway({}) {
@@ -152,6 +169,7 @@ function SubwayMap({}) {
             ? parseInt(searchParams.get("pattern"))
             : null;
     const platformSet = searchParams.get("ps") === null ? null : searchParams.get("ps"); // TODO extra validation
+    const [showMenu, setShowMenu] = useState(false);
     const [psHover, setPsHover] = useState([null, false]);
     const [serviceHover, setServiceHover] = useState(null);
     const [patternHover, setPatternHover] = useState(null);
@@ -263,22 +281,20 @@ function SubwayMap({}) {
         attribute || pattern !== null || patternHover !== null
             ? {...TRACK_ATTRIBUTES[pattern !== null || patternHover !== null ? "service" : attribute], highlightValue}
             : null;
-    const setFocus =
-        (type, doubleclick = false) =>
-        (value) => {
-            updateSearchParams(setSearchParams, "pattern", null);
-            updateSearchParams(setSearchParams, "service", null);
-            updateSearchParams(setSearchParams, "ps", null);
-            if (!value || (doubleclick && value === focusValue)) {
-                updateSearchParams(setSearchParams, "ftype", null);
-                updateSearchParams(setSearchParams, "fvalue", null);
-                return true;
-            } else {
-                updateSearchParams(setSearchParams, "ftype", type);
-                updateSearchParams(setSearchParams, "fvalue", value);
-                return false;
-            }
-        };
+    const setFocus = (type, value, doubleclick = false) => {
+        updateSearchParams(setSearchParams, "pattern", null);
+        updateSearchParams(setSearchParams, "service", null);
+        updateSearchParams(setSearchParams, "ps", null);
+        if (!value || (doubleclick && value === focusValue)) {
+            updateSearchParams(setSearchParams, "ftype", null);
+            updateSearchParams(setSearchParams, "fvalue", null);
+            return true;
+        } else {
+            updateSearchParams(setSearchParams, "ftype", type);
+            updateSearchParams(setSearchParams, "fvalue", value);
+            return false;
+        }
+    };
 
     const pat = patternHover === null ? pattern : patternHover;
     const ser = serviceHover === null ? service : serviceHover;
@@ -308,7 +324,7 @@ function SubwayMap({}) {
     const menuMargin = {mr: "8px"};
 
     return (
-        <MainSpan flexDirection="row" alignItems="center" justifyContent="center">
+        <MainSpan>
             <MainSvg
                 as="svg"
                 xmlns="http://www.w3.org/2000/svg"
@@ -337,15 +353,33 @@ function SubwayMap({}) {
 
                     {Object.values(TRACK_SEGMENTS)
                         .filter((segment) => segment.visible)
+                        .map((segment) => {
+                            const attributes = getAttributes(segment);
+                            return {
+                                ...segment,
+                                useShadow:
+                                    segment.lines.includes(lineHover) ||
+                                    (highlight &&
+                                        attributes[highlight.attribute] !== null &&
+                                        highlight.getColor(highlight.highlightValue).stroke === highlight.getColor(attributes[highlight.attribute]).stroke),
+                                highlightColor: highlight ? highlight.getColor(attributes[highlight.attribute]) : null,
+                            };
+                        })
+                        // Bring highlighted track segments to the front. If optimization becomes a problem, we can skip this sort if nothing is being highlighted.
+                        .toSorted((s1, s2) => {
+                            if (s1.useShadow === s2.useShadow) {
+                                return 0;
+                            }
+                            return s1.useShadow ? 1 : -1;
+                        })
                         .map((segment) => (
                             <TrackSegmentSvg
                                 key={segment.id}
                                 id={segment.id}
                                 d={segment.d}
                                 baseWidth={svgDimensions.y / 500}
-                                attributes={getAttributes(segment)}
-                                highlight={highlight}
-                                hover={segment.lines.includes(lineHover)}
+                                highlightColor={segment.highlightColor}
+                                useShadow={segment.useShadow}
                                 setLineHover={(tr) => setLineHover(tr ? segment.lines[0] : null)}
                             />
                         ))}
@@ -374,7 +408,7 @@ function SubwayMap({}) {
                                     coordinates={coordinates}
                                     setPsHover={(tr) => setPsHover([tr ? identifier : null, true])}
                                     setFocus={() => {
-                                        const doubleclick = setFocus("ps", onClickPs === platformSet)(identifier);
+                                        const doubleclick = setFocus("ps", identifier, onClickPs === platformSet);
                                         updateSearchParams(setSearchParams, "ps", doubleclick ? null : onClickPs);
                                     }}
                                 />,
@@ -391,7 +425,7 @@ function SubwayMap({}) {
                                         coordinates={coordinates}
                                         setPsHover={(tr) => setPsHover([tr ? psIdentifier : null, false])}
                                         setFocus={() => {
-                                            const doubleclick = setFocus("ps", psIdentifier === platformSet)(identifier);
+                                            const doubleclick = setFocus("ps", identifier, psIdentifier === platformSet);
                                             updateSearchParams(setSearchParams, "ps", doubleclick ? null : psIdentifier);
                                         }}
                                     />,
@@ -418,7 +452,7 @@ function SubwayMap({}) {
                                 bullets={bullets}
                                 setPsHover={(tr) => setPsHover([tr ? identifier : null, isStation])}
                                 setFocus={() => {
-                                    const doubleclick = setFocus("ps", true)(onClickPs);
+                                    const doubleclick = setFocus("ps", onClickPs, true);
                                     updateSearchParams(setSearchParams, "ps", doubleclick ? null : onClickPs);
                                 }}
                             />
@@ -431,148 +465,158 @@ function SubwayMap({}) {
                     <LinePreview line={lineHover} select={select} />
                 </AbsolutePositioned>
             )}
-            <AbsolutePositioned left="0px" top="0px">
-                <span>
-                    <span>
-                        <MenuButton as="button" {...menuMargin} {...menuPadding} onClick={() => updateZoom(1, true)}>
-                            +
-                        </MenuButton>
-                        <MenuButton as="button" {...menuMargin} {...menuPadding} onClick={reset}>
-                            Reset
-                        </MenuButton>
-                        <MenuButton as="button" {...menuPadding} onClick={() => updateZoom(-1, true)}>
-                            -
-                        </MenuButton>
-                    </span>
-                    <br />
-                    <Sized as="label" {...menuMargin}>
-                        Show Select Service?
-                    </Sized>
-                    <input
-                        type="checkbox"
-                        checked={select}
-                        onClick={() => {
-                            updateSearchParams(setSearchParams, "select", !select);
-                        }}
-                    />
-                    <br />
-                    <Sized as="label" {...menuMargin}>
-                        Scale Stations by Boardings?
-                    </Sized>
-                    <input
-                        type="checkbox"
-                        checked={scale}
-                        onClick={() => {
-                            updateSearchParams(setSearchParams, "scale", !scale);
-                        }}
-                    />
-                    <br />
-                    <Sized as="label" {...menuMargin}>
-                        Track Highlight
-                    </Sized>
-                    <select
-                        onChange={(event) => {
-                            updateSearchParams(setSearchParams, "attribute", TRACK_ATTRIBUTES_NAME_MAP?.[event.target.value]?.attribute);
-                        }}
-                    >
-                        {[{attribute: null, name: "None", visible: true}, ...Object.values(TRACK_ATTRIBUTES)]
-                            .filter(({visible}) => visible)
-                            .map(({attribute: att, name}) => (
-                                <option key={att} selected={att === attribute}>
-                                    {name}
-                                </option>
-                            ))}
-                    </select>
-                    <br />
-                    <Sized as="label" {...menuMargin}>
-                        Station
-                    </Sized>
-                    <select
-                        onChange={(event) => {
-                            if (event.target.value === "None") {
-                                setFocus("ps", false)(null);
-                            } else {
-                                setFocus("ps", false)(PLATFORM_SETS[event.target.value].stationKey);
-                                updateSearchParams(setSearchParams, "ps", event.target.value);
-                            }
-                        }}
-                    >
-                        {/*TODO change to stations?*/}
-                        {["None", ...Object.keys(PLATFORM_SETS).toSorted()].map((name) => (
-                            // TODO this doesn't work, mouseenter/leave are not supported by option, need a custom component
-                            <option
-                                key={name}
-                                onMouseEnter={() => {
-                                    setPsHover(null);
+            <MenuContainer>
+                <MenuFlexContainer flexDirection="row" alignItems="flex-start">
+                    {showMenu && (
+                        <MenuWindowContainer>
+                            {/* TODO fix this dom tree generally. Better incorporate into flex. */}
+                            <span>
+                                <MenuButton as="button" {...menuMargin} {...menuPadding} onClick={() => updateZoom(1, true)}>
+                                    +
+                                </MenuButton>
+                                <MenuButton as="button" {...menuMargin} {...menuPadding} onClick={reset}>
+                                    Reset
+                                </MenuButton>
+                                <MenuButton as="button" {...menuPadding} onClick={() => updateZoom(-1, true)}>
+                                    -
+                                </MenuButton>
+                            </span>
+                            <Sized as="label" {...menuMargin}>
+                                Show Select Service?
+                            </Sized>
+                            <input
+                                type="checkbox"
+                                checked={select}
+                                onClick={() => {
+                                    updateSearchParams(setSearchParams, "select", !select);
                                 }}
-                                onMouseLeave={() => {
-                                    setPsHover(null);
+                            />
+                            <Sized as="label" {...menuMargin}>
+                                Scale Stations by Boardings?
+                            </Sized>
+                            <input
+                                type="checkbox"
+                                checked={scale}
+                                onClick={() => {
+                                    updateSearchParams(setSearchParams, "scale", !scale);
                                 }}
-                                selected={(focusType === "ps" && platformSet === name) || (focusType !== "ps" && name === null)}
+                            />
+                            <Sized as="label" {...menuMargin}>
+                                Track Highlight
+                            </Sized>
+                            <select
+                                onChange={(event) => {
+                                    updateSearchParams(setSearchParams, "attribute", TRACK_ATTRIBUTES_NAME_MAP?.[event.target.value]?.attribute);
+                                }}
                             >
-                                {name}
-                            </option>
-                        ))}
-                    </select>
-                    <br />
-                    <Sized as="label" {...menuMargin}>
-                        Service
-                    </Sized>
-                    <select
-                        onChange={(event) => {
-                            if (event.target.value === "None") {
-                                setFocus("service", false)(null);
-                            } else {
-                                setFocus("service", false)(event.target.value);
-                            }
-                        }}
-                    >
-                        {["None", ...Object.keys(SERVICES)].map((name) => (
-                            <option key={name} selected={(focusType === "service" && focusValue === name) || (focusType !== "service" && name === null)}>
-                                {name}
-                            </option>
-                        ))}
-                    </select>
-                    <br />
-                    <br />
-                </span>
-                {highlight && (
-                    <FlexItem>
-                        <TrackLegend data={highlight} setHighlightValue={setHighlightValue} />
-                        <br />
-                        <br />
-                    </FlexItem>
-                )}
-                {pat !== null && (
-                    <FlexItem>
-                        <PlatformSetLegend colors={PS_COLORS} size={3.5} />
-                    </FlexItem>
-                )}
-            </AbsolutePositioned>
+                                {[{attribute: null, name: "None", visible: true}, ...Object.values(TRACK_ATTRIBUTES)]
+                                    .filter(({visible}) => visible)
+                                    .map(({attribute: att, name}) => (
+                                        <option key={att} selected={att === attribute}>
+                                            {name}
+                                        </option>
+                                    ))}
+                            </select>
+                            <Sized as="label" {...menuMargin}>
+                                Station
+                            </Sized>
+                            <select
+                                onChange={(event) => {
+                                    if (event.target.value === "None") {
+                                        setFocus("ps", null, false);
+                                    } else {
+                                        setFocus("ps", PLATFORM_SETS[event.target.value].stationKey, false);
+                                        updateSearchParams(setSearchParams, "ps", event.target.value);
+                                    }
+                                }}
+                            >
+                                {/*TODO change to stations?*/}
+                                {["None", ...Object.keys(PLATFORM_SETS).toSorted()].map((name) => (
+                                    // TODO this doesn't work, mouseenter/leave are not supported by option, need a custom component
+                                    <option
+                                        key={name}
+                                        onMouseEnter={() => {
+                                            setPsHover(null);
+                                        }}
+                                        onMouseLeave={() => {
+                                            setPsHover(null);
+                                        }}
+                                        selected={(focusType === "ps" && platformSet === name) || (focusType !== "ps" && name === null)}
+                                    >
+                                        {name}
+                                    </option>
+                                ))}
+                            </select>
+                            <Sized as="label" {...menuMargin}>
+                                Service
+                            </Sized>
+                            <select
+                                onChange={(event) => {
+                                    if (event.target.value === "None") {
+                                        setFocus("service", null, false);
+                                    } else {
+                                        setFocus("service", event.target.value, false);
+                                    }
+                                }}
+                            >
+                                {["None", ...Object.keys(SERVICES)].map((name) => (
+                                    <option
+                                        key={name}
+                                        selected={(focusType === "service" && focusValue === name) || (focusType !== "service" && name === null)}
+                                    >
+                                        {name}
+                                    </option>
+                                ))}
+                            </select>
+                        </MenuWindowContainer>
+                    )}
+                    <MenuButton as="button" onClick={() => setShowMenu(!showMenu)}>
+                        {showMenu ? "<" : ">"}
+                    </MenuButton>
+                    {(highlight !== null || pat !== null) && (
+                        <RelativePositioned left="20px">
+                            {highlight && <TrackLegend data={highlight} setHighlightValue={setHighlightValue} />}
+                            {pat !== null && <PlatformSetLegend colors={PS_COLORS} size={3.5} />}
+                        </RelativePositioned>
+                    )}
+                </MenuFlexContainer>
+            </MenuContainer>
+
             {focusValue && (
-                <FocusContainer top="0px" right="0px">
-                    {focusType === "ps" && (
-                        <StationFocus
-                            station={STATIONS[focusValue]}
-                            psName={platformSet}
-                            setPsName={(psName) => updateSearchParams(setSearchParams, "ps", psName)}
-                            select={select}
-                        />
-                    )}
-                    {focusType === "service" && (
-                        <ServiceFocus
-                            servicesInformation={SERVICES[focusValue]}
-                            selected={{service, pattern}}
-                            setHover={(s, p) => {
-                                setServiceHover(s);
-                                setPatternHover(p);
-                            }}
-                            setSelect={(s, p) => {
-                                updateSearchParams(setSearchParams, "service", s);
-                                updateSearchParams(setSearchParams, "pattern", p);
-                            }}
-                        />
-                    )}
+                <FocusContainer
+                    onWheel={(e) => {
+                        e.stopPropagation();
+                    }}
+                >
+                    <FocusCloseButton
+                        close={() => {
+                            setFocus(null, null);
+                        }}
+                    />
+                    <FocusWindowContainer>
+                        {focusType === "ps" && (
+                            <StationFocus
+                                station={STATIONS[focusValue]}
+                                psName={platformSet}
+                                setPsName={(psName) => updateSearchParams(setSearchParams, "ps", psName)}
+                                select={select}
+                            />
+                        )}
+                        {focusType === "service" && (
+                            <ServiceFocus
+                                servicesInformation={SERVICES[focusValue]}
+                                selected={{service, pattern}}
+                                setHover={(s, p) => {
+                                    setServiceHover(s);
+                                    setPatternHover(p);
+                                }}
+                                setSelect={(s, p) => {
+                                    updateSearchParams(setSearchParams, "service", s);
+                                    updateSearchParams(setSearchParams, "pattern", p);
+                                }}
+                            />
+                        )}
+                    </FocusWindowContainer>
                 </FocusContainer>
             )}
         </MainSpan>
@@ -583,19 +627,11 @@ const TrackSegmentPath = styled.path`
     cursor: default;
 `;
 
-function TrackSegmentSvg({id, d, baseWidth, attributes, highlight, hover, setLineHover}) {
-    const {stroke, opacity} = highlight ? highlight.getColor(attributes[highlight.attribute]) : {stroke: "#9c9c9c", opacity: "1"};
+function TrackSegmentSvg({id, d, baseWidth, highlightColor, useShadow, setLineHover}) {
+    const {stroke, opacity} = highlightColor ?? {stroke: "#9c9c9c", opacity: "1"};
     if (stroke === undefined) {
-        throw new Error(`Track segment ${id} has no attribute ${highlight.attribute} or highlight has no value ${attributes[highlight.attribute]}`);
+        throw new Error(`Track segment ${id} stroke is undefined`);
     }
-    // const shadowSize = "0.5px";
-    // const shadowColor = "#555555";
-    // TODO bring to front if using shadow? Overall I'm a bit dissatisfied with this
-    const useShadow =
-        hover ||
-        (highlight &&
-            attributes[highlight.attribute] !== null &&
-            highlight.getColor(highlight.highlightValue).stroke === highlight.getColor(attributes[highlight.attribute]).stroke);
     //const style = useShadow ? {filter: `drop-shadow(-${shadowSize} -${shadowSize} ${shadowColor}) drop-shadow(${shadowSize} -${shadowSize} ${shadowColor}) drop-shadow(${shadowSize} ${shadowSize} ${shadowColor}) drop-shadow(-${shadowSize} ${shadowSize} ${shadowColor})`} : {}
     return (
         <TrackSegmentPath
@@ -657,7 +693,9 @@ const LegendCell = styled(Sized)`
 `;
 
 const LegendTable = styled.table`
+    border: 0.5px solid;
     border-spacing: 10px;
+    margin-bottom: 20px;
 `;
 
 function Legend({name, colors, onTrMouseEnter, onTrMouseLeave, SvgChild}) {
@@ -669,6 +707,7 @@ function Legend({name, colors, onTrMouseEnter, onTrMouseLeave, SvgChild}) {
                     <th colSpan="2">{name}</th>
                 </tr>
             </thead>
+            {/* TODO use css grid! */}
             <tbody>
                 {Object.entries(colors)
                     .filter(([option, _]) => option !== "null")
@@ -687,7 +726,7 @@ function Legend({name, colors, onTrMouseEnter, onTrMouseLeave, SvgChild}) {
                                 <LegendCell w="12px" />
                             </td>
                             <td>
-                                <LegendCell as="svg" xmlns="http://www.w3.org/2000/svg" width="30px" height="20px">
+                                <LegendCell as="svg" xmlns="http://www.w3.org/2000/svg" w="30px" h="20px">
                                     <SvgChild color={color} />
                                 </LegendCell>
                             </td>
@@ -696,6 +735,15 @@ function Legend({name, colors, onTrMouseEnter, onTrMouseLeave, SvgChild}) {
             </tbody>
         </LegendTable>
     );
+}
+
+const StyledFocusCloseButton = styled.button`
+    padding: 4px;
+    box-shadow: 0 0 6px 0px rgba(0, 0, 0, 0.3);
+`;
+
+function FocusCloseButton({close}) {
+    return <StyledFocusCloseButton onClick={close}>X</StyledFocusCloseButton>;
 }
 
 function TrackLegend({data, setHighlightValue}) {
@@ -739,7 +787,7 @@ const ServicePatternsContainer = styled.span`
 
 function ServiceFocus({servicesInformation, selected, setHover, setSelect}) {
     return (
-        <>
+        <span>
             {servicesInformation.map(({service, subtitle, servicePatterns}, serviceIndex) => (
                 <>
                     {BULLETS[service]()} {subtitle}
@@ -772,7 +820,7 @@ function ServiceFocus({servicesInformation, selected, setHover, setSelect}) {
                     <br />
                 </>
             ))}
-        </>
+        </span>
     );
 }
 
@@ -792,7 +840,6 @@ const PsTab = styled(Fonted)`
     padding: 10px;
 `;
 
-// TODO Fix scrolling in station window (use CSS "float" property instead of flex?)
 function StationFocus({station, psName, setPsName, select}) {
     const {name, platformSets, boardings: initialBoardings, odt, rank: initialRank} = station;
     // TODO change once times square is added
@@ -824,7 +871,7 @@ function StationFocus({station, psName, setPsName, select}) {
         }
     }
     return (
-        <>
+        <span>
             <Sign>
                 {name}
                 <br />
@@ -859,7 +906,7 @@ function StationFocus({station, psName, setPsName, select}) {
                 </>
             )}
             <br />
-        </>
+        </span>
     );
 }
 

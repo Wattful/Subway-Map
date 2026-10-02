@@ -1,7 +1,6 @@
 import styled, {css} from "styled-components";
 
-const AbsolutePositioned = styled.span`
-    position: absolute;
+const positioned = css`
     ${(props) =>
         props.left &&
         css`
@@ -27,6 +26,16 @@ const AbsolutePositioned = styled.span`
         css`
             transform: ${props.transform};
         `}
+`;
+
+const AbsolutePositioned = styled.span`
+    position: absolute;
+    ${positioned}
+`;
+
+const RelativePositioned = styled.span`
+    position: relative;
+    ${positioned}
 `;
 
 const sizingFunction = (props, prefix, nameFunc) => {
@@ -167,4 +176,4 @@ const FlexContainer = styled.span`
         `}
 `;
 
-export {AbsolutePositioned, Sized, Fonted, FlexItem, FlexContainer};
+export {AbsolutePositioned, RelativePositioned, Sized, Fonted, FlexItem, FlexContainer};
