@@ -14,8 +14,8 @@ export default defineConfig([
         },
         settings: {react: {version: "detect"}},
         rules: {
-            "no-debugger": "warn",
-            "no-console": "warn",
+            "no-debugger": "error",
+            "no-console": "error",
             "array-callback-return": "error",
             "arrow-body-style": ["error", "as-needed"],
             "consistent-return": "error",

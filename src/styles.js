@@ -176,4 +176,22 @@ const FlexContainer = styled.span`
         `}
 `;
 
-export {AbsolutePositioned, RelativePositioned, Sized, Fonted, FlexItem, FlexContainer};
+const DotEllipse = styled.ellipse`
+    fill: ${(props) => props.fill};
+    cursor: default;
+    stroke: rgb(0, 0, 0);
+`;
+
+const Sign = styled.div`
+    border-top: 10px;
+    padding: 2px 10px;
+    background-color: #000000;
+    color: #ffffff;
+    font-family: Helvetica;
+    font-weight: bold;
+    border-top-style: solid;
+    border-top-color: black;
+    box-shadow: inset 0 2px white;
+`;
+
+export {AbsolutePositioned, RelativePositioned, Sized, Fonted, FlexItem, FlexContainer, DotEllipse, Sign};

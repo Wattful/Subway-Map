@@ -1,4 +1,4 @@
-import {DateTime} from "luxon";
+import {DateTime, Interval} from "luxon";
 import {
     Line,
     Service,
@@ -8,6 +8,9 @@ import {
     PlatformService,
     ArrowDirection,
     ServiceDirection,
+    Division,
+    SignalingType,
+    Company,
     ServiceTimeComponent,
     ServiceTimeType,
 } from "./enums.js";
@@ -30,6 +33,7 @@ import {
     SegmentServiceLabel,
     ServiceStop,
     Miscellaneous,
+    TrackAttribute,
 } from "./objects.js";
 import {TRACK_SEGMENTS, PLATFORM_SET_COORDS, SERVICE_SEGMENT_BORDERS} from "./tsdata.js";
 
@@ -2420,6 +2424,43 @@ for (const platformSet of Object.values(PLATFORM_SETS)) {
     }
 }
 
+const selfPointingTrackAttributeObject = (attribute, name, visible, options, discrete) => ({
+    [attribute]: new TrackAttribute(attribute, name, visible, options, discrete),
+});
+
+const TRACK_ATTRIBUTES = {
+    ...selfPointingTrackAttributeObject("total_tracks", "Total Tracks", true, [1, 2, 3, 4, 6, 7, 8], true),
+    ...selfPointingTrackAttributeObject("used_tracks", "Used Tracks", true, [0, 1, 2, 3, 4, 6, 7, 8], true),
+    ...selfPointingTrackAttributeObject("unused_tracks", "Unused Tracks", true, [0, 1, 2], true),
+    ...selfPointingTrackAttributeObject(
+        "opened",
+        "Date Opened",
+        true,
+        [
+            // TODO encode this data somewhere else? Could use single dates to avoid duplication
+            // Start: >=, end: <
+            ["Before 1900", Interval.fromDateTimes(DateTime.fromObject({year: 1, month: 1, day: 1}), DateTime.fromObject({year: 1900, month: 1, day: 1}))],
+            ["1900 - 1909", Interval.fromDateTimes(DateTime.fromObject({year: 1900, month: 1, day: 1}), DateTime.fromObject({year: 1910, month: 1, day: 1}))],
+            ["1910 - 1919", Interval.fromDateTimes(DateTime.fromObject({year: 1910, month: 1, day: 1}), DateTime.fromObject({year: 1920, month: 1, day: 1}))],
+            ["1920 - 1929", Interval.fromDateTimes(DateTime.fromObject({year: 1920, month: 1, day: 1}), DateTime.fromObject({year: 1930, month: 1, day: 1}))],
+            ["1930 - 1939", Interval.fromDateTimes(DateTime.fromObject({year: 1930, month: 1, day: 1}), DateTime.fromObject({year: 1940, month: 1, day: 1}))],
+            ["1940 - 1949", Interval.fromDateTimes(DateTime.fromObject({year: 1940, month: 1, day: 1}), DateTime.fromObject({year: 1950, month: 1, day: 1}))],
+            ["1950 - 1959", Interval.fromDateTimes(DateTime.fromObject({year: 1950, month: 1, day: 1}), DateTime.fromObject({year: 1960, month: 1, day: 1}))],
+            ["1960 - 1999", Interval.fromDateTimes(DateTime.fromObject({year: 1960, month: 1, day: 1}), DateTime.fromObject({year: 2000, month: 1, day: 1}))],
+            [
+                "2000 - present",
+                Interval.fromDateTimes(DateTime.fromObject({year: 2000, month: 1, day: 1}), DateTime.fromObject({year: 3000, month: 1, day: 1})),
+            ],
+        ],
+        false,
+    ),
+    ...selfPointingTrackAttributeObject("obf", "Originally Built For", true, Object.values(Company), true),
+    ...selfPointingTrackAttributeObject("type", "Track Type", true, Object.values(StructureType), true),
+    ...selfPointingTrackAttributeObject("division", "Division", true, Object.values(Division), true),
+    ...selfPointingTrackAttributeObject("signaling", "Signaling Type", true, Object.values(SignalingType), true),
+    ...selfPointingTrackAttributeObject("service", "Service", false, [null, ...Object.values(TrackType)], true),
+};
+
 // Assign station boardings ranks
 let previousBoardings = null;
 // This is used in the unlikely case of a tie
@@ -2456,4 +2497,4 @@ const MIN_BOARDINGS = Math.min(
 );
 const MAX_RANK = Math.max(...Object.values(STATIONS).map(({rank}) => rank));
 
-export {TRACK_SEGMENTS, SERVICES, STATIONS, PLATFORM_SETS, MIN_BOARDINGS, MAX_RANK};
+export {TRACK_SEGMENTS, SERVICES, STATIONS, PLATFORM_SETS, TRACK_ATTRIBUTES, MIN_BOARDINGS, MAX_RANK};

@@ -323,6 +323,41 @@ function Miscellaneous(description) {
     this.description = description;
 }
 
+function TrackAttribute(attribute, name, visible, options, discrete) {
+    this.attribute = attribute;
+    this.name = name;
+    this.visible = visible;
+    this.options = options;
+    // TODO absolutely need to replace this as it's confusing
+    const highlightColors = ["#a7a9ac", "#0039a6", "#ff6319", "#6cbe45", "#996633", "#fccc0a", "#ee352e", "#00933c", "#b933ad", "#00add00", "#808183"];
+    if (discrete) {
+        this.colors = this.options.reduce((acc, option, index) => {
+            acc[option] = highlightColors[typeof option === "number" ? option : index];
+            return acc;
+        }, {});
+    } else {
+        this.colors = this.options.reduce((acc, [option, _], index) => {
+            acc[option] = highlightColors[typeof option === "number" ? option : index];
+            return acc;
+        }, {});
+    }
+    // Return opacity as I might want to use this later for service highlighting. If I decide not to use, remove and always set to 1.
+    this.getColor = (value) => {
+        if (value === null) {
+            return {stroke: "#9c9c9c", opacity: "1"};
+        } else if (discrete) {
+            return {stroke: this.colors[value], opacity: "1"};
+        } else {
+            for (const [option, interval] of this.options) {
+                if (interval.contains(value) || option === value) {
+                    return {stroke: this.colors[option], opacity: "1"};
+                }
+            }
+        }
+        throw new Error(`Color not found for ${attribute} ${value}`);
+    };
+}
+
 const getTerminalKey = (direction, type) => `${direction}${type}`;
 
 // TODO sort function for this
@@ -353,6 +388,7 @@ export {
     SegmentServiceLabel,
     ServiceStop,
     Miscellaneous,
+    TrackAttribute,
     getTerminalKey,
     getServiceKey,
     getDisambiguatedName,
