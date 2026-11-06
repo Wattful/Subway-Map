@@ -1,5 +1,6 @@
 import shorelineData from "./shoreline_raw.json" with {type: "json"};
 import trackData from "./track_raw.json" with {type: "json"};
+import ctrackData from "./ctrack_raw.json" with {type: "json"};
 import stationsData from "./stations_raw.json" with {type: "json"};
 import fs from "fs";
 import {forEachCoord} from "./util.js";
@@ -52,6 +53,8 @@ const {features: shorelineFeatures, ...shorelineAttrs} = shorelineData;
 let shorelineOutputFeatures = [];
 const {features: trackFeatures, ...trackAttrs} = trackData;
 let trackOutputFeatures = [];
+const {features: ctrackFeatures} = ctrackData;
+let ctrackOutputFeatures = [];
 const {features: stationsFeatures, ...stationsAttrs} = stationsData;
 let stationsOutputFeatures = [];
 
@@ -70,6 +73,14 @@ forEachCoord(shorelineFeatures, (x, y, feature) => {
 forEachCoord(trackFeatures, (x, y, feature) => {
     if (x > tX) {
         trackOutputFeatures = [...trackOutputFeatures, feature];
+        return true;
+    }
+    return false;
+});
+
+forEachCoord(ctrackFeatures, (x, y, feature) => {
+    if (x > tX) {
+        ctrackOutputFeatures = [...ctrackOutputFeatures, feature];
         return true;
     }
     return false;
@@ -115,6 +126,17 @@ trackOutputFeatures = trackOutputFeatures.map(({type, properties, geometry}) => 
     };
 });
 
+ctrackOutputFeatures = ctrackOutputFeatures.map(({type, properties, geometry}) => {
+    const {SEGMENTID: id} = properties;
+    return {
+        type,
+        properties: {
+            id,
+        },
+        geometry,
+    };
+});
+
 stationsOutputFeatures = stationsOutputFeatures.map(({type, properties, geometry}) => {
     const {SUBWAYSTAT: id} = properties;
     return {type, properties: {id}, geometry};
@@ -140,6 +162,7 @@ createFillerSegment([-8238888.122288354, 4969115.110719187], [-8238844.668789842
 // Duplicate segment on eastern pkwy line and new lots line yard tracks
 const segmentsToExclude = new Set([8102331, 8106931, 8106933, 8106936, 8106930, 8106934, 8106935, 8106932, 8106937]);
 trackOutputFeatures = trackOutputFeatures.filter((segment) => !segmentsToExclude.has(segment.properties.id));
+ctrackOutputFeatures = ctrackOutputFeatures.filter((segment) => !segmentsToExclude.has(segment.properties.id));
 
 const vertexToIdMap = {};
 forEachCoord(trackOutputFeatures, (x, y, feature, end) => {
@@ -483,6 +506,10 @@ if (unfilledTracks.length > 0) {
 
 const shorelineOutput = {...shorelineAttrs, features: shorelineOutputFeatures};
 const trackOutput = {...trackAttrs, features: trackOutputFeatures};
+const ctrackOutput = ctrackOutputFeatures.reduce((acc, val) => {
+    acc[val.properties.id] = val;
+    return acc;
+}, {});
 const stationsOutput = {...stationsAttrs, features: stationsOutputFeatures};
 
 fs.writeFile("shoreline_processed.json", JSON.stringify(shorelineOutput), (err) => {
@@ -491,6 +518,11 @@ fs.writeFile("shoreline_processed.json", JSON.stringify(shorelineOutput), (err) 
     }
 });
 fs.writeFile("track_processed.json", JSON.stringify(trackOutput), (err) => {
+    if (err) {
+        console.log(err);
+    }
+});
+fs.writeFile("ctrack_processed.json", JSON.stringify(ctrackOutput), (err) => {
     if (err) {
         console.log(err);
     }

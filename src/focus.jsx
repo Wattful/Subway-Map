@@ -7,7 +7,7 @@ import {serviceTimeEqual, getDisambiguatedName as gdn} from "./objects.js";
 import {ServiceTimeType, StructureType, PlatformService, ArrowDirection, ServiceTimeComponent} from "./enums.js";
 import {MAX_RANK} from "./data.js";
 
-import {BULLETS} from "./bullets.jsx";
+import {Bullet, getBullets} from "./bullets.jsx";
 
 const StyledFocusCloseButton = styled.button`
     padding: 4px;
@@ -61,7 +61,7 @@ function ServiceFocus({servicesInformation, selected, setHover, setSelect, close
             <span>
                 {servicesInformation.map(({service, subtitle, servicePatterns}, serviceIndex) => (
                     <>
-                        {BULLETS[service]()} {subtitle}
+                        <Bullet service={service} /> {subtitle}
                         <br />
                         <ServicePatternsContainer>
                             {servicePatterns.map(({serviceDescription}, patternIndex) => {
@@ -112,29 +112,16 @@ function StationFocus({station, psName, setPsName, select, close}) {
             return `${num}th`;
         }
     };
-    const bullets = new Set();
-    for (const platformSet of Object.values(platformSets)) {
-        for (const track of platformSet.tracks) {
-            for (const {service, stops, serviceTime} of Object.values(track.service)) {
-                if (!stops) {
-                    continue;
-                }
-                // TODO order, NOTE: late nights and weekends omitted on purpose
-                if (select || serviceTime.hasServiceForTime([ServiceTimeComponent.WEEKDAYS_EXCEPT_LATE_EVENINGS], ServiceTimeType.YES)) {
-                    bullets.add(service);
-                }
-            }
-        }
-    }
+    const bullets = getBullets(Object.values(platformSets), select);
     return (
         <Focus close={close}>
             <span>
                 <Sign>
                     {name}
                     <br />
-                    {Array.from(bullets)
-                        .toSorted()
-                        .map((bullet) => BULLETS[bullet]())}
+                    {bullets.map((bullet) => (
+                        <Bullet key={bullet} service={bullet} />
+                    ))}
                 </Sign>
                 {boardings.toLocaleString()} boardings (2023), {ordinal(rank)} of {MAX_RANK}
                 <br />
@@ -298,7 +285,7 @@ function Track({track, psName, select}) {
                                 return (
                                     <Sized as="div" key={key} {...margin}>
                                         {arrows[entryDirection]}
-                                        {BULLETS[serviceName]()}
+                                        <Bullet service={serviceName} />
                                         {` ${serviceTimeString(serviceTime, ServiceTimeType.YES)} ${serviceTimeString(serviceTime, ServiceTimeType.SELECT)}`}{" "}
                                         {stopDescription()}
                                     </Sized>
@@ -310,7 +297,7 @@ function Track({track, psName, select}) {
                                     return (
                                         <Sized as="div" key={key} {...margin}>
                                             {arrows[entryDirection]}
-                                            {BULLETS[serviceName]()}
+                                            <Bullet service={serviceName} />
                                             {` ${serviceTimeString(serviceTime, ServiceTimeType.YES)}`} {stopDescription()}
                                         </Sized>
                                     );
@@ -405,11 +392,11 @@ function serviceTimeString(serviceTime, level) {
     const getMessage = (message, plural) => (plural ? message : message[message.length - 1] === "s" ? message.slice(0, message.length - 1) : message);
     const humanReadableList = (ls) =>
         ls.length === 1 ? ls[0] : `${ls.slice(0, ls.length - 1).join(", ")}${ls.length > 2 ? "," : ""} and ${ls[ls.length - 1]}`;
-    const getHumanReadableList = (sh, plural) => humanReadableList(Object.keys(shorthand).map((desc) => getMessage(desc, plural)));
+    const getHumanReadableList = (plural) => humanReadableList(Object.keys(shorthand).map((desc) => getMessage(desc, plural)));
     // TODO - could have hardcoded "except" here for except late nights or except rush
     //const useInverse = false;
     //return `${select ? "Select trips e" : "E"}xcept ${getHumanReadableList(([desc, el]) => el !== level, true)}`;
-    return `${select ? "Select " : ""}${getHumanReadableList(shorthand, !select)}${select ? " trips" : ""}`;
+    return `${select ? "Select " : ""}${getHumanReadableList(!select)}${select ? " trips" : ""}`;
 }
 
 export {StationFocus, ServiceFocus};

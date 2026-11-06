@@ -3,13 +3,12 @@ import {BrowserRouter, Route, Routes, useSearchParams} from "react-router-dom";
 import styled from "styled-components";
 
 import {Menu} from "./menu.jsx";
-import {TrackLegend, PlatformSetLegend} from "./legends.jsx";
+import {TrackLegend, PlatformSetLegend, StationScaleLegend} from "./legends.jsx";
 import {StationFocus, ServiceFocus} from "./focus.jsx";
 
 import {SERVICES, STATIONS, PLATFORM_SETS, TRACK_ATTRIBUTES, MIN_BOARDINGS} from "./data.js";
-import {BULLETS} from "./bullets.jsx";
+import {Bullet, getBullets} from "./bullets.jsx";
 import {TRACK_SEGMENTS} from "./tsdata.js";
-import {ServiceTimeType, ServiceTimeComponent} from "./enums.js";
 import {getDisambiguatedName as gdn} from "./objects.js";
 import {AbsolutePositioned, RelativePositioned, Sized, FlexContainer, DotEllipse, Sign} from "./styles.js";
 
@@ -48,9 +47,9 @@ const useMousePosition = () => {
 const BACKGROUND_SRC = require("./shoreline.png");
 
 const PS_COLORS = {
-    true: "#fffb00", // Stops
-    false: "#ff0000", // Does not stop
-    undefined: "#ffffff", // Does not run through
+    true: {label: "Stops", color: "#fffb00"},
+    false: {label: "Doesn't Stop", color: "#ff0000"},
+    undefined: {label: null, color: "#ffffff"}, // Does not run through
 };
 
 const MainSvg = styled(Sized)`
@@ -78,33 +77,16 @@ const MenuFlexContainer = styled.span`
     align-items: flex-start;
 `;
 
-const getBullets = (platformSets, select, line = null) => {
-    const bullets = new Set();
-    for (const platformSet of platformSets) {
-        for (const track of platformSet.tracks) {
-            for (const {service, stops, serviceTime} of Object.values(track.service)) {
-                if (!stops) {
-                    continue;
-                }
-                // TODO order NOTE: late nights and weekends omitted on purpose
-                if (
-                    (select || serviceTime.hasServiceForTime([ServiceTimeComponent.WEEKDAYS_EXCEPT_LATE_EVENINGS], ServiceTimeType.YES)) &&
-                    (line === null || track.line === line)
-                ) {
-                    bullets.add(service);
-                }
-            }
-        }
-    }
-    // TODO order bullets and return list?
-    return bullets;
-};
-
 const cxy = (callback) => ({x: callback("x"), y: callback("y")});
 
+const parsingInfo = (parse = (input) => input, serialize = (value) => value) => ({parse, serialize});
+
 const boolParsing = (input) => input === "true" || false;
+const setParsing = (input) => new Set(input ? input.split("|") : []);
 const objectHasParsing = (input, obj) => (Object.hasOwn(obj, input) ? input : null);
 const arrayHasParsing = (input, arr) => (!isNaN(parseInt(input)) && arr[parseInt(input)] !== undefined ? parseInt(input) : null);
+
+const setSerialization = (value) => (value === null || value.size === 0 ? null : [...value].join("|"));
 
 function Subway({}) {
     return (
@@ -130,16 +112,16 @@ function SubwayMap({}) {
             return prev;
         });
     };
-    const useSimpleURLParam = (key, parse) => [parse(searchParams.get(key)), (value) => updateSearchParam(key, value)];
+    const useSimpleURLParam = (key, {parse, serialize}) => [parse(searchParams.get(key)), (value) => updateSearchParam(key, serialize(value))];
 
-    const [attribute, setAttribute] = useSimpleURLParam("attribute", (input) => objectHasParsing(input, TRACK_ATTRIBUTES));
-    const [select, setSelect] = useSimpleURLParam("select", boolParsing);
-    const [scale, setScale] = useSimpleURLParam("scale", boolParsing);
+    const [select, setSelect] = useSimpleURLParam("select", parsingInfo(boolParsing));
+    const [scale, setScale] = useSimpleURLParam("scale", parsingInfo(boolParsing));
+    const [hide, setHide] = useSimpleURLParam("hide", parsingInfo(boolParsing));
 
-    const useFocusParams = (spec) => {
+    const useChainedParams = (spec) => {
         let found = false;
         return Object.entries(spec).reduce((acc, [key, parses]) => {
-            acc[key] = useFocusParam(key, parses, Object.keys(spec), found);
+            acc[key] = useChainedParam(key, parses, Object.keys(spec), found);
             if (acc[key][0][0] !== null) {
                 found = true;
             }
@@ -149,8 +131,8 @@ function SubwayMap({}) {
     // Return an arbitrary number of params from a single comma-separated param.
     // For a param to parse, it must parse and all its parent params must also parse.
     // Setting a child param does not overwrite parent params. Setting a parent param does overwrite child params.
-    const useFocusParam = (key, parses, overwrites, truncate) => {
-        const [rawVal, setRawVal] = useSimpleURLParam(key, (input) => input);
+    const useChainedParam = (key, parses, overwrites, truncate) => {
+        const [rawVal, setRawVal] = useSimpleURLParam(key, parsingInfo());
         const setAndOverwrite = (value) => {
             for (const overwrite of overwrites) {
                 if (overwrite !== key) {
@@ -162,16 +144,18 @@ function SubwayMap({}) {
         const rawTokens = rawVal === null ? [] : rawVal.split(",");
         const retVal = [];
         for (let i = 0; i < parses.length; i++) {
-            const parsedVal = (i !== 0 && retVal[i - 1][0] === null) || truncate ? null : parses[i](rawTokens.slice(0, i + 1));
+            const {parse, serialize} = parses[i];
+            const parsedVal = (i !== 0 && retVal[i - 1][0] === null) || truncate ? null : parse(rawTokens.slice(0, i + 1));
             // Here we call searchParams.get to get the current value, this allows us to set multiple params at once.
             retVal.push([
                 parsedVal,
                 (value) => {
+                    const serializedValue = serialize(value);
                     let newValue;
-                    if (value === null) {
+                    if (serializedValue === null) {
                         newValue = i === 0 ? null : searchParams.get(key).split(",", i).join(",");
                     } else {
-                        newValue = `${i === 0 ? "" : `${searchParams.get(key).split(",", i).join(",")},`}${value}`;
+                        newValue = `${i === 0 ? "" : `${searchParams.get(key).split(",", i).join(",")},`}${serializedValue}`;
                     }
                     setAndOverwrite(newValue);
                 },
@@ -181,14 +165,29 @@ function SubwayMap({}) {
     };
 
     const {
+        attribute: [[attribute, setAttribute], [hiddenLabels, setHiddenLabels]],
+    } = useChainedParams({
+        attribute: [parsingInfo((input) => objectHasParsing(input, TRACK_ATTRIBUTES)), parsingInfo((input) => setParsing(input[1]), setSerialization)],
+    });
+
+    const {
         station: [[station, setStation], [ps, setPs]],
-        service: [[service, setService], [selectedSubservice, setSelectedSubservice], [selectedPattern, setSelectedPattern]],
-    } = useFocusParams({
-        station: [(input) => objectHasParsing(input[0], STATIONS), (input) => objectHasParsing(input[1], STATIONS[input[0]].platformSets)],
         service: [
-            (input) => objectHasParsing(input[0], SERVICES),
-            (input) => arrayHasParsing(input[1], SERVICES[input[0]]),
-            (input) => arrayHasParsing(input[2], SERVICES[input[0]][input[1]].servicePatterns),
+            [service, setService],
+            [selectedSubservice, setSelectedSubservice],
+            [selectedPattern, setSelectedPattern],
+            [patternHiddenLabels, setPatternHiddenLabels],
+        ],
+    } = useChainedParams({
+        station: [
+            parsingInfo((input) => objectHasParsing(input[0], STATIONS)),
+            parsingInfo((input) => objectHasParsing(input[1], STATIONS[input[0]].platformSets)),
+        ],
+        service: [
+            parsingInfo((input) => objectHasParsing(input[0], SERVICES)),
+            parsingInfo((input) => arrayHasParsing(input[1], SERVICES[input[0]])),
+            parsingInfo((input) => arrayHasParsing(input[2], SERVICES[input[0]][input[1]].servicePatterns)),
+            parsingInfo((input) => setParsing(input[3]), setSerialization),
         ],
     });
 
@@ -272,6 +271,15 @@ function SubwayMap({}) {
         };
     }, [updateZoom]);
 
+    const getStationSize = useCallback(
+        (scaleStation, boardings) => {
+            const baseSize = svgDimensions.y / 275;
+            const scaleBaseSize = baseSize / 3;
+            return scaleStation ? Math.sqrt(boardings / MIN_BOARDINGS) * scaleBaseSize : baseSize;
+        },
+        [svgDimensions],
+    );
+
     useEffect(() => {
         const img = new Image();
         img.onload = () => {
@@ -286,7 +294,85 @@ function SubwayMap({}) {
     const pattern = patternHover === null ? selectedPattern : patternHover;
     const subservice = subserviceHover === null ? selectedSubservice : subserviceHover;
 
-    const highlight = attribute || pattern !== null ? {...TRACK_ATTRIBUTES[pattern === null ? attribute : "service"], highlightValue} : null;
+    const highlightHiddenLabels = (pattern === null ? hiddenLabels : patternHiddenLabels) ?? new Set();
+    const highlight =
+        attribute || pattern !== null
+            ? {
+                  ...TRACK_ATTRIBUTES[pattern === null ? attribute : "service"],
+                  highlightValue,
+                  hiddenLabels: highlightHiddenLabels,
+                  setHiddenLabel: (label, hidden) =>
+                      (pattern === null ? setHiddenLabels : setPatternHiddenLabels)(
+                          hidden ? (highlightHiddenLabels.delete(label), highlightHiddenLabels) : highlightHiddenLabels.add(label),
+                      ),
+              }
+            : null;
+
+    const highlightLengths = {};
+
+    // 1. Filter to only visible segments
+    // 2. Add information related to highlight/shadow to all segments
+    // 3. Calculate total length of track for each highlighting label (used in legend)
+    const enrichedSegments = Object.values(TRACK_SEGMENTS)
+        .filter((segment) => segment.visible)
+        .map((segment) => {
+            if (highlight === null) {
+                return {
+                    ...segment,
+                    useShadow: false,
+                    highlightColor: null,
+                    drawSegment: true,
+                };
+            }
+            const {id, d, ...attributes} = segment;
+            if (pattern !== null) {
+                const segmentServiceLabel = SERVICES[service][subservice].servicePatterns[pattern].route.find(
+                    ({serviceSegment}) => serviceSegment === attributes.service_segment,
+                );
+                attributes.service = segmentServiceLabel ? segmentServiceLabel.type : null;
+            }
+            const segmentHiglightBucket = highlight.getBucket(attributes[highlight.attribute]);
+            if (segmentHiglightBucket !== null) {
+                if (highlightLengths[segmentHiglightBucket] === undefined) {
+                    highlightLengths[segmentHiglightBucket] = segment.length;
+                } else {
+                    // TODO could use sumPrecise, but probably not necessary
+                    highlightLengths[segmentHiglightBucket] += segment.length;
+                }
+            }
+            return {
+                ...segment,
+                useShadow:
+                    segment.lines.includes(lineHover) ||
+                    (segmentHiglightBucket !== null && highlight.highlightValue !== null && highlight.highlightValue === segmentHiglightBucket),
+                highlightColor: highlight.getColor(segmentHiglightBucket),
+                drawSegment: !highlightHiddenLabels.has(segmentHiglightBucket),
+            };
+        });
+    if(highlight){
+        highlight.highlightLengths = highlightLengths;
+    }
+
+    // Map from station on route to whether service stops at that station
+    const stopsMap =
+        pattern === null
+            ? null
+            : SERVICES[service][subservice].servicePatterns[pattern].compiledRoute.reduce((obj, serviceStop) => {
+                  const {stop, disambiguator, tracksNorth, tracksSouth} = serviceStop;
+                  obj[gdn(stop, disambiguator)] = [...tracksNorth, ...tracksSouth].some((track) => track.stops);
+                  return obj;
+              }, {});
+    const stopsCount =
+        stopsMap &&
+        Object.values(stopsMap).reduce((acc, stops) => {
+            const {label} = PS_COLORS[stops];
+            if (acc[label] === undefined) {
+                acc[label] = 1;
+            } else {
+                acc[label] += 1;
+            }
+            return acc;
+        }, {});
 
     return (
         <MainSpan>
@@ -300,12 +386,16 @@ function SubwayMap({}) {
                 width={svgDimensions.x}
                 viewBox={`0 0 ${svgDimensions.x} ${svgDimensions.y}`}
                 version="1.1"
-                onMouseDown={() => {
+                onMouseDown={(e) => {
                     setStartDragPosition({...mousePosition});
+                    const svg = document.getElementById("svg2");
+                    svg.setPointerCapture(e.pointerId);
                 }}
-                onMouseUp={() => {
+                onMouseUp={(e) => {
                     setBaseTranslate({...translate});
                     setStartDragPosition(null);
+                    const svg = document.getElementById("svg2");
+                    svg.releasePointerCapture(e.pointerId);
                 }}
                 cursor={startDragPosition ? "grabbing" : "grab"}
                 w="100vw"
@@ -316,26 +406,8 @@ function SubwayMap({}) {
                 <g transform={`matrix(${zoom} 0 0 ${zoom} ${translate.x} ${translate.y})`}>
                     <image x="0" y="0" width="100%" xlinkHref={BACKGROUND_SRC} />
 
-                    {Object.values(TRACK_SEGMENTS)
-                        .filter((segment) => segment.visible)
-                        .map((segment) => {
-                            const {id, d, ...attributes} = segment;
-                            if (pattern !== null) {
-                                const segmentServiceLabel = SERVICES[service][subservice].servicePatterns[pattern].route.find(
-                                    ({serviceSegment}) => serviceSegment === attributes.service_segment,
-                                );
-                                attributes.service = segmentServiceLabel ? segmentServiceLabel.type : null;
-                            }
-                            return {
-                                ...segment,
-                                useShadow:
-                                    segment.lines.includes(lineHover) ||
-                                    (highlight &&
-                                        attributes[highlight.attribute] !== null &&
-                                        highlight.getColor(highlight.highlightValue).stroke === highlight.getColor(attributes[highlight.attribute]).stroke),
-                                highlightColor: highlight ? highlight.getColor(attributes[highlight.attribute]) : null,
-                            };
-                        })
+                    {enrichedSegments
+                        .filter((segment) => segment.drawSegment)
                         // Bring highlighted track segments to the front. If optimization becomes a problem, we can skip this sort if nothing is being highlighted.
                         .toSorted((s1, s2) => {
                             if (s1.useShadow === s2.useShadow) {
@@ -354,67 +426,57 @@ function SubwayMap({}) {
                                 setLineHover={(tr) => setLineHover(tr ? segment.lines[0] : null)}
                             />
                         ))}
-                    {Object.entries(STATIONS).reduce((acc, [identifier, stationObject]) => {
-                        const baseSize = svgDimensions.y / 275;
-                        const scaleBaseSize = baseSize / 3;
-                        const size = scale ? Math.sqrt(stationObject.boardings / MIN_BOARDINGS) * scaleBaseSize : baseSize;
-                        // Map from station on route to whether service stops at that station
-                        const stops =
-                            pattern === null
-                                ? null
-                                : SERVICES[service][subservice].servicePatterns[pattern].compiledRoute.reduce((obj, serviceStop) => {
-                                      const {stop, disambiguator, tracksNorth, tracksSouth} = serviceStop;
-                                      obj[gdn(stop, disambiguator)] = [...tracksNorth, ...tracksSouth].some((track) => track.stops);
-                                      return obj;
-                                  }, {});
-                        // If only rendering one dot per station
-                        if (scale) {
-                            // TODO updated conditions - something related to zoom and closeness of dots
-                            const {coordinates} = stationObject;
-                            // Iterate through the platform sets, take the first value which is not undefined. We should never see more than one defined value here.
-                            const fill =
-                                PS_COLORS[
-                                    stops === null
-                                        ? undefined
-                                        : Object.keys(stationObject.platformSets)
-                                              .map((psIdentifier) => stops[psIdentifier])
-                                              .reduce((acc2, f) => (acc2 === undefined ? f : acc2), undefined)
-                                ];
-                            const onClickPs = Object.keys(stationObject.platformSets)[0];
-                            acc.push(
-                                <MapDot
-                                    key={identifier}
-                                    fill={fill}
-                                    size={size}
-                                    coordinates={coordinates}
-                                    setPsHover={(tr) => setPsHover([tr ? identifier : null, true])}
-                                    setFocus={() => {
-                                        setStation(identifier);
-                                        setPs(onClickPs);
-                                    }}
-                                />,
-                            );
-                        } else {
-                            for (const [psIdentifier, psObject] of Object.entries(stationObject.platformSets)) {
-                                const {coordinates} = psObject;
-                                const fill = stops === null ? PS_COLORS.undefined : PS_COLORS[stops[psIdentifier]];
+                    {!hide &&
+                        Object.entries(STATIONS).reduce((acc, [identifier, stationObject]) => {
+                            const size = getStationSize(scale, stationObject.boardings);
+                            // If only rendering one dot per station
+                            if (scale) {
+                                // TODO updated conditions - something related to zoom and closeness of dots
+                                const {coordinates} = stationObject;
+                                // Iterate through the platform sets, take the first value which is not undefined. We should never see more than one defined value here.
+                                const fill =
+                                    PS_COLORS[
+                                        stopsMap === null
+                                            ? undefined
+                                            : Object.keys(stationObject.platformSets)
+                                                  .map((psIdentifier) => stopsMap[psIdentifier])
+                                                  .reduce((acc2, f) => (acc2 === undefined ? f : acc2), undefined)
+                                    ].color;
+                                const onClickPs = Object.keys(stationObject.platformSets)[0];
                                 acc.push(
                                     <MapDot
-                                        key={psIdentifier}
+                                        key={identifier}
                                         fill={fill}
                                         size={size}
                                         coordinates={coordinates}
-                                        setPsHover={(tr) => setPsHover([tr ? psIdentifier : null, false])}
+                                        setPsHover={(tr) => setPsHover([tr ? identifier : null, true])}
                                         setFocus={() => {
                                             setStation(identifier);
-                                            setPs(psIdentifier);
+                                            setPs(onClickPs);
                                         }}
                                     />,
                                 );
+                            } else {
+                                for (const [psIdentifier, psObject] of Object.entries(stationObject.platformSets)) {
+                                    const {coordinates} = psObject;
+                                    const fill = stopsMap === null ? PS_COLORS.undefined.color : PS_COLORS[stopsMap[psIdentifier]].color;
+                                    acc.push(
+                                        <MapDot
+                                            key={psIdentifier}
+                                            fill={fill}
+                                            size={size}
+                                            coordinates={coordinates}
+                                            setPsHover={(tr) => setPsHover([tr ? psIdentifier : null, false])}
+                                            setFocus={() => {
+                                                setStation(identifier);
+                                                setPs(psIdentifier);
+                                            }}
+                                        />,
+                                    );
+                                }
                             }
-                        }
-                        return acc;
-                    }, [])}
+                            return acc;
+                        }, [])}
                 </g>
             </MainSvg>
             {psHover[0] &&
@@ -457,6 +519,8 @@ function SubwayMap({}) {
                         setSelect={setSelect}
                         scale={scale}
                         setScale={setScale}
+                        hide={hide}
+                        setHide={setHide}
                         attribute={attribute}
                         setAttribute={setAttribute}
                         station={station}
@@ -466,12 +530,21 @@ function SubwayMap({}) {
                         service={service}
                         setService={setService}
                     />
-                    {(highlight !== null || pattern !== null) && (
-                        <RelativePositioned left="20px">
-                            {highlight && <TrackLegend data={highlight} setHighlightValue={setHighlightValue} />}
-                            {pattern !== null && <PlatformSetLegend colors={PS_COLORS} />}
-                        </RelativePositioned>
-                    )}
+                    <RelativePositioned left="20px">
+                        {highlight && <TrackLegend data={highlight} setHighlightValue={setHighlightValue} />}
+                        {pattern !== null && (
+                            <PlatformSetLegend
+                                data={Object.entries(PS_COLORS)
+                                    .filter(([entry, _]) => entry !== undefined)
+                                    .reduce((acc, [_, {label, color}]) => {
+                                        acc[label] = color;
+                                        return acc;
+                                    }, {})}
+                                stopsCount={stopsCount}
+                            />
+                        )}
+                        {scale && <StationScaleLegend getSize={(boardings) => getStationSize(true, boardings)} />}
+                    </RelativePositioned>
                 </MenuFlexContainer>
             </MenuContainer>
 
@@ -509,7 +582,6 @@ function TrackSegmentSvg({id, d, baseWidth, highlightColor, useShadow, setLineHo
     //const style = useShadow ? {filter: `drop-shadow(-${shadowSize} -${shadowSize} ${shadowColor}) drop-shadow(${shadowSize} -${shadowSize} ${shadowColor}) drop-shadow(${shadowSize} ${shadowSize} ${shadowColor}) drop-shadow(-${shadowSize} ${shadowSize} ${shadowColor})`} : {}
     return (
         <TrackSegmentPath
-            id={`path${id}`}
             title={id}
             fill="none"
             stroke={stroke}
@@ -519,7 +591,6 @@ function TrackSegmentSvg({id, d, baseWidth, highlightColor, useShadow, setLineHo
             strokeMiterlimit="10"
             strokeWidth={useShadow ? baseWidth * 2 : baseWidth}
             d={d}
-            clipPath="url(#SVGID_548_)"
             onMouseDown={(e) => {
                 e.stopPropagation();
             }}
@@ -573,9 +644,9 @@ function PlatformSetPreview({name, bullets, setPsHover, setFocus}) {
         >
             {name}
             <br />
-            {Array.from(bullets)
-                .toSorted()
-                .map((bullet) => BULLETS[bullet]())}
+            {bullets.map((bullet) => (
+                <Bullet key={bullet} service={bullet} />
+            ))}
         </Sign>
     );
 }
@@ -587,9 +658,9 @@ function LinePreview({line, select}) {
         <Sign>
             {line}
             <br />
-            {Array.from(bullets)
-                .toSorted()
-                .map((bullet) => BULLETS[bullet]())}
+            {bullets.map((bullet) => (
+                <Bullet key={bullet} service={bullet} />
+            ))}
         </Sign>
     );
 }

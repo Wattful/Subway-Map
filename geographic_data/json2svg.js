@@ -5,9 +5,10 @@ import fs from "fs";
 import {forEachCoord} from "./util.js";
 import shorelineData from "./shoreline_processed.json" with {type: "json"};
 import trackData from "./track_processed.json" with {type: "json"};
+import ctrackData from "./ctrack_processed.json" with {type: "json"};
 import stationsData from "./stations_processed.json" with {type: "json"};
 
-const {geoPath} = d3Geo;
+const {geoPath, geoLength} = d3Geo;
 const height = parseInt(process.argv[2]);
 if (!height) {
     throw new Error("Height not specified");
@@ -77,9 +78,11 @@ svgexport.render(
     },
 );
 
+const EARTH_CIRCUMFERENCE_MILES = 3958;
+
 const trackJson = pixel_track.features.reduce((acc, feature) => {
     const {id, ...props} = feature.properties;
-    acc[id] = {id, ...props, d: geoPath()(feature)};
+    acc[id] = {id, ...props, d: geoPath()(feature), length: geoLength(ctrackData[id]) * EARTH_CIRCUMFERENCE_MILES};
     return acc;
 }, {});
 fs.writeFile("../src/track.json", JSON.stringify(trackJson, null, 4), (err) => {

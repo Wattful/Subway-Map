@@ -30,6 +30,8 @@ function Menu({
     setSelect,
     scale,
     setScale,
+    hide,
+    setHide,
     attribute,
     setAttribute,
     setStation,
@@ -75,6 +77,16 @@ function Menu({
                         checked={scale}
                         onClick={() => {
                             setScale(!scale);
+                        }}
+                    />
+                    <Sized as="label" {...menuMargin}>
+                        Hide stations?
+                    </Sized>
+                    <input
+                        type="checkbox"
+                        checked={hide}
+                        onClick={() => {
+                            setHide(!hide);
                         }}
                     />
                     <Sized as="label" {...menuMargin}>

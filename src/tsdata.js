@@ -266,7 +266,7 @@ assignAttributes([[jamaicaN, jamaicaMyrtleAv, jamaicaS]], {
     obf: Company.BMT,
 });
 assignAttributes([[jamaica2to3Track, jamaicaMyrtleAv]], {total_tracks: 3, used_tracks: 2, unused_tracks: 1});
-assignAttributes([[jamaicaMyrtleAvS, jamaica3to2Track]], {total_tracks: 3, used_tracks: 3, unused_tracks: 0});
+assignAttributes([[jamaicaMyrtleAv, jamaica3to2Track]], {total_tracks: 3, used_tracks: 3, unused_tracks: 0});
 assignAttributesToLineRemainder(Line.BMT_JAMAICA_LINE, {total_tracks: 2, used_tracks: 2, unused_tracks: 0});
 assignAttributes([[jamaicaN, jamaica111thStN]], {opened: DateTime.fromObject({year: 1918, month: 7, day: 3})});
 assignAttributes([[jamaica111thStN, jamaicaCypressHillsN]], {opened: DateTime.fromObject({year: 1917, month: 5, day: 28})});

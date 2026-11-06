@@ -341,21 +341,23 @@ function TrackAttribute(attribute, name, visible, options, discrete) {
             return acc;
         }, {});
     }
-    // Return opacity as I might want to use this later for service highlighting. If I decide not to use, remove and always set to 1.
-    this.getColor = (value) => {
+    this.getBucket = (value) => {
         if (value === null) {
-            return {stroke: "#9c9c9c", opacity: "1"};
+            return null;
         } else if (discrete) {
-            return {stroke: this.colors[value], opacity: "1"};
+            // Convert number-based attributes to string for consistency
+            return value.toString();
         } else {
             for (const [option, interval] of this.options) {
                 if (interval.contains(value) || option === value) {
-                    return {stroke: this.colors[option], opacity: "1"};
+                    return option.toString();
                 }
             }
         }
-        throw new Error(`Color not found for ${attribute} ${value}`);
+        throw new Error(`Bucket not found for ${attribute} ${value}`);
     };
+    // Return opacity as I might want to use this later for service highlighting. TODO If I decide not to use, remove and always set to 1.
+    this.getColor = (bucket) => ({stroke: bucket === null ? "#9c9c9c" : this.colors[bucket], opacity: "1"});
 }
 
 const getTerminalKey = (direction, type) => `${direction}${type}`;
